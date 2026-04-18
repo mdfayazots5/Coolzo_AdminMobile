@@ -1,0 +1,77 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
+import { Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[8px] text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.98] transition-transform",
+  {
+    variants: {
+      variant: {
+        primary:
+          "bg-brand-gold text-brand-navy shadow hover:bg-brand-gold/90",
+        secondary:
+          "border border-brand-navy bg-transparent text-brand-navy hover:bg-brand-navy/5",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+        icon: "size-10",
+      },
+      fullWidth: {
+        true: "w-full",
+      }
+    },
+    defaultVariants: {
+      variant: "primary",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+  isLoading?: boolean
+  iconLeft?: React.ReactNode
+  iconRight?: React.ReactNode
+}
+
+const AdminButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, fullWidth, asChild = false, isLoading, iconLeft, iconRight, children, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, fullWidth, className }))}
+        ref={ref}
+        disabled={isLoading || props.disabled}
+        {...props}
+      >
+        {isLoading ? (
+          <Loader2 className="animate-spin" />
+        ) : (
+          <>
+            {iconLeft && <span>{iconLeft}</span>}
+            {children}
+            {iconRight && <span>{iconRight}</span>}
+          </>
+        )}
+      </Comp>
+    )
+  }
+)
+AdminButton.displayName = "AdminButton"
+
+export { AdminButton, buttonVariants }

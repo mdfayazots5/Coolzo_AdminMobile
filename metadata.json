@@ -1,0 +1,5 @@
+{
+  "name": "Coolzo Admin",
+  "description": "Premium AC Service Platform Admin Dashboard - Role-Based Management System",
+  "requestFramePermissions": ["geolocation"]
+}
