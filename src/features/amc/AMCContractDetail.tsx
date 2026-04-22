@@ -13,14 +13,11 @@ import {
   FileText, 
   Calendar, 
   User, 
-  CheckCircle2, 
-  Clock, 
   ChevronLeft,
   Wrench,
   CreditCard,
   ChevronRight,
   AlertCircle,
-  ArrowRight,
   Download,
   Share2,
   MoreVertical,
@@ -37,6 +34,7 @@ export default function AMCContractDetail() {
   const [contract, setContract] = React.useState<AMCContract | null>(null)
   const [equipment, setEquipment] = React.useState<Equipment[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
+  const [isUpdatingVisit, setIsUpdatingVisit] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -44,7 +42,8 @@ export default function AMCContractDetail() {
       try {
         const c = await amcRepository.getContractById(id);
         if (c) {
-          setContract(c);
+          const visits = await amcRepository.getContractVisits(id);
+          setContract({ ...c, visits });
           const eq = await Promise.all(c.equipmentIds.map(eid => equipmentRepository.getEquipmentById(eid)));
           setEquipment(eq.filter((e): e is Equipment => e !== null));
         }
@@ -62,6 +61,72 @@ export default function AMCContractDetail() {
 
   const progress = (contract.completedVisits / contract.totalVisits) * 100;
 
+  const refreshContract = async () => {
+    if (!id) return;
+    const nextContract = await amcRepository.getContractById(id);
+    if (!nextContract) return;
+    const visits = await amcRepository.getContractVisits(id);
+    setContract({ ...nextContract, visits });
+  };
+
+  const handleAssign = async (visit: AMCVisit) => {
+    try {
+      setIsUpdatingVisit(visit.id);
+      await amcRepository.assignVisit(visit.id, 'unassigned-tech', 'Dispatch Pending');
+      await refreshContract();
+      toast.success("Visit assigned");
+    } catch {
+      toast.error("Failed to assign technician");
+    } finally {
+      setIsUpdatingVisit(null);
+    }
+  };
+
+  const handleReschedule = async (visit: AMCVisit) => {
+    try {
+      setIsUpdatingVisit(visit.id);
+      await amcRepository.rescheduleVisit(visit.id, visit.scheduledDate, 'Reschedule pending');
+      await refreshContract();
+      toast.success("Visit rescheduled");
+    } catch {
+      toast.error("Failed to reschedule visit");
+    } finally {
+      setIsUpdatingVisit(null);
+    }
+  };
+
+  const handleComplete = async (visit: AMCVisit) => {
+    try {
+      setIsUpdatingVisit(visit.id);
+      await amcRepository.completeVisit(visit.id, visit.linkedSRId);
+      await refreshContract();
+      toast.success("Visit marked complete");
+    } catch {
+      toast.error("Failed to complete visit");
+    } finally {
+      setIsUpdatingVisit(null);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const pdfUrl = await amcRepository.getContractPdfUrl(contract.id);
+      window.open(pdfUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("Contract PDF is unavailable");
+    }
+  };
+
+  const handleShareRenewal = async () => {
+    try {
+      await amcRepository.bulkSendRenewalReminders([contract.id]);
+      toast.success("Renewal reminder queued");
+      await refreshContract();
+    } catch {
+      toast.error("Failed to send renewal reminder");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -75,10 +140,10 @@ export default function AMCContractDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
+          <button onClick={handleDownloadPdf} className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
             <Download size={20} />
           </button>
-          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
+          <button onClick={handleShareRenewal} className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
             <Share2 size={20} />
           </button>
           <AdminButton variant="outline">Edit Contract</AdminButton>
@@ -105,6 +170,7 @@ export default function AMCContractDetail() {
               <InfoRow label="Start Date" value={contract.startDate} />
               <InfoRow label="End Date" value={contract.endDate} />
               <InfoRow label="Enrolled By" value={contract.enrolledBy} />
+              <InfoRow label="Renewal" value={(contract.renewalDisposition || 'pending').replace('_', ' ')} />
             </div>
           </AdminCard>
 
@@ -139,8 +205,8 @@ export default function AMCContractDetail() {
                   {contract.paymentStatus}
                 </span>
               </div>
-              <AdminButton className="w-full bg-brand-gold text-brand-navy hover:bg-brand-gold/90" size="sm">
-                View Receipt
+              <AdminButton className="w-full bg-brand-gold text-brand-navy hover:bg-brand-gold/90" size="sm" onClick={handleDownloadPdf}>
+                View Contract PDF
               </AdminButton>
             </div>
           </AdminCard>
@@ -220,15 +286,23 @@ export default function AMCContractDetail() {
                         <span className={cn(
                           "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
                           visit.status === 'completed' ? "bg-status-completed/10 text-status-completed" :
-                          visit.status === 'scheduled' ? "bg-brand-navy/5 text-brand-navy" : "bg-status-emergency/10 text-status-emergency"
+                          visit.status === 'scheduled' || visit.status === 'pending' || visit.status === 'rescheduled'
+                            ? "bg-brand-navy/5 text-brand-navy"
+                            : "bg-status-emergency/10 text-status-emergency"
                         )}>
                           {visit.status}
                         </span>
                       </td>
                       <td className="py-4">
                         <div className="flex items-center gap-2">
-                          {visit.status === 'scheduled' ? (
-                            <AdminButton size="sm" variant="outline">Assign</AdminButton>
+                          {!visit.assignedTechnicianId && (visit.status === 'pending' || visit.status === 'scheduled') ? (
+                            <AdminButton size="sm" variant="outline" onClick={() => handleAssign(visit)} disabled={isUpdatingVisit === visit.id}>Assign</AdminButton>
+                          ) : null}
+                          {visit.assignedTechnicianId && (visit.status === 'scheduled' || visit.status === 'rescheduled') ? (
+                            <>
+                              <AdminButton size="sm" variant="outline" onClick={() => handleReschedule(visit)} disabled={isUpdatingVisit === visit.id}>Reschedule</AdminButton>
+                              <AdminButton size="sm" onClick={() => handleComplete(visit)} disabled={isUpdatingVisit === visit.id}>Complete</AdminButton>
+                            </>
                           ) : visit.status === 'completed' ? (
                             <button className="p-2 text-brand-gold hover:bg-brand-gold/10 rounded-lg transition-all">
                               <FileText size={16} />
@@ -258,8 +332,8 @@ export default function AMCContractDetail() {
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <AdminButton className="flex-1">Renew Contract</AdminButton>
-                <AdminButton variant="outline" className="flex-1">Send Renewal Quote</AdminButton>
+                <AdminButton className="flex-1" onClick={() => navigate(`/amc/enroll?renew=${contract.id}`)}>Renew Contract</AdminButton>
+                <AdminButton variant="outline" className="flex-1" onClick={handleShareRenewal}>Send Renewal Quote</AdminButton>
               </div>
             </AdminCard>
           )}

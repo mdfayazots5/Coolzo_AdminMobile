@@ -3,241 +3,417 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as React from "react"
-import { motion } from "motion/react"
-import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { serviceRequestRepository, ServiceRequest } from "@/core/network/service-request-repository"
-import { technicianRepository } from "@/core/network/technician-repository"
-import { useAuthStore } from "@/store/auth-store"
-import { 
-  ClipboardList, 
-  MapPin, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle,
-  Bell,
-  Star,
-  ChevronRight,
+import * as React from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Clock3,
+  ClipboardList,
+  MapPin,
   Navigation,
-  Phone
-} from "lucide-react"
-import { AdminButton } from "@/components/shared/AdminButton"
-import { cn } from "@/lib/utils"
-import { useNavigate } from "react-router-dom"
-import { toast } from "sonner"
+  Phone,
+  ShieldCheck,
+  UserCircle2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { AdminCard } from "@/components/shared/Cards";
+import { AdminButton } from "@/components/shared/AdminButton";
+import { InlineLoader } from "@/components/shared/Layout";
+import {
+  FieldAttendanceRecord,
+  FieldJobListItem,
+  HelperJobView,
+  fieldWorkflowRepository,
+} from "@/core/network/field-workflow-repository";
+import { UserRole, useAuthStore } from "@/store/auth-store";
+import { cn } from "@/lib/utils";
+
+const isTodayRecord = (attendance?: FieldAttendanceRecord | null) =>
+  attendance?.attendanceDate === new Date().toISOString().slice(0, 10);
+
+const captureLocation = async () =>
+  new Promise<{ latitude?: number; longitude?: number }>((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({});
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }),
+      () => resolve({}),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  });
 
 export default function TechnicianHomeDashboard() {
-  const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [todayJobs, setTodayJobs] = React.useState<ServiceRequest[]>([])
-  const [isLoading, setIsLoading] = React.useState(true)
-  const [isCheckedIn, setIsCheckedIn] = React.useState(false)
+  const { user } = useAuthStore();
+  const isHelper = user?.role === UserRole.HELPER;
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [jobs, setJobs] = React.useState<FieldJobListItem[]>([]);
+  const [attendance, setAttendance] = React.useState<FieldAttendanceRecord | null>(null);
+  const [helperJob, setHelperJob] = React.useState<HelperJobView | null>(null);
+  const [isSubmittingAttendance, setIsSubmittingAttendance] = React.useState(false);
+
+  const loadDashboard = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      if (isHelper) {
+        const assignment = await fieldWorkflowRepository.getHelperJobView();
+        setHelperJob(assignment);
+        setAttendance(
+          assignment?.attendance.find((item) => isTodayRecord(item)) ?? assignment?.attendance[0] ?? null,
+        );
+      } else {
+        const myJobs = await fieldWorkflowRepository.getMyJobs();
+        setJobs(myJobs);
+        const cachedAttendance = fieldWorkflowRepository.getCachedAttendance();
+        setAttendance(isTodayRecord(cachedAttendance) ? cachedAttendance : null);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to load field dashboard.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isHelper]);
 
   React.useEffect(() => {
-    const fetchJobs = async () => {
-      if (!user?.id) return;
-      try {
-        const myJobs = await serviceRequestRepository.getTechnicianJobs(user.id);
-        // Filter jobs assigned to this technician for today
-        const filtered = myJobs.filter(sr => 
-          sr.status === 'assigned' || sr.status === 'en-route' || sr.status === 'arrived' || sr.status === 'in-progress'
-        );
-        setTodayJobs(filtered);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchJobs();
-  }, [user?.id])
+    void loadDashboard();
+  }, [loadDashboard]);
 
-  const handleCheckIn = () => {
-    setIsCheckedIn(true);
-    toast.success("Checked in from base successfully", {
-      description: `GPS recorded at ${new Date().toLocaleTimeString()}`
-    });
+  const handleTechnicianAttendance = async (mode: "check-in" | "check-out") => {
+    setIsSubmittingAttendance(true);
+    try {
+      const location = await captureLocation();
+      const nextAttendance =
+        mode === "check-in"
+          ? await fieldWorkflowRepository.checkIn("Base / field start", location.latitude, location.longitude)
+          : await fieldWorkflowRepository.checkOut("Field wrap-up", location.latitude, location.longitude);
+      setAttendance(nextAttendance);
+      toast.success(mode === "check-in" ? "Checked in successfully." : "Checked out successfully.");
+    } catch (error) {
+      console.error(error);
+      toast.error(`Unable to ${mode} right now.`);
+    } finally {
+      setIsSubmittingAttendance(false);
+    }
+  };
+
+  const handleHelperAttendance = async (mode: "check-in" | "check-out") => {
+    setIsSubmittingAttendance(true);
+    try {
+      const nextAttendance =
+        mode === "check-in"
+          ? await fieldWorkflowRepository.checkInHelper("Helper shift started")
+          : await fieldWorkflowRepository.checkOutHelper("Helper shift closed");
+      setAttendance(nextAttendance);
+      setHelperJob((current) =>
+        current
+          ? {
+              ...current,
+              attendance:
+                mode === "check-in"
+                  ? [nextAttendance, ...current.attendance]
+                  : [nextAttendance, ...current.attendance.slice(1)],
+            }
+          : current,
+      );
+      toast.success(mode === "check-in" ? "Helper attendance recorded." : "Helper check-out recorded.");
+    } catch (error) {
+      console.error(error);
+      toast.error(`Unable to ${mode} right now.`);
+    } finally {
+      setIsSubmittingAttendance(false);
+    }
+  };
+
+  if (isLoading) {
+    return <InlineLoader className="h-screen" />;
   }
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
+  if (isHelper) {
+    return (
+      <HelperDashboard
+        attendance={attendance}
+        helperJob={helperJob}
+        isSubmittingAttendance={isSubmittingAttendance}
+        onRefresh={loadDashboard}
+        onAttendance={handleHelperAttendance}
+        onOpenJob={(serviceRequestId) => navigate(`/field/helper/job/${serviceRequestId}`)}
+      />
+    );
+  }
 
-  const nextJob = todayJobs[0];
-  const completedToday = 0; // Mock
+  const openJobs = jobs.filter((job) => job.status !== "completed" && job.status !== "cancelled");
+  const completedCount = jobs.filter((job) => job.status === "completed").length;
+  const nextJob = openJobs[0];
+  const isCheckedIn = Boolean(attendance?.checkInOnUtc && !attendance?.checkOutOnUtc);
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="size-12 bg-brand-navy text-brand-gold rounded-2xl flex items-center justify-center font-bold text-xl">
-            {user?.name?.charAt(0)}
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-brand-navy text-brand-gold">
+            <UserCircle2 size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-brand-navy">Hello, {user?.name}</h1>
-            <p className="text-xs text-brand-muted font-bold uppercase tracking-widest">Technician ID: {user?.id}</p>
+            <h1 className="text-xl font-bold text-brand-navy">{user?.name || "Field Team"}</h1>
+            <p className="text-xs font-bold uppercase tracking-widest text-brand-muted">
+              Technician field dashboard
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => toast.info("Check Notification", { description: "2 new job updates from operations team." })}
-            className="p-3 bg-white border border-border rounded-2xl text-brand-navy relative"
-          >
-            <Bell size={20} />
-            <span className="absolute top-2 right-2 size-2 bg-status-emergency rounded-full border-2 border-white" />
-          </button>
-        </div>
+        <AdminButton variant="secondary" onClick={() => navigate("/attendance")}>
+          Attendance
+        </AdminButton>
       </div>
 
-      {/* Attendance Card */}
-      {!isCheckedIn ? (
-        <AdminCard className="p-6 bg-brand-gold/10 border-brand-gold/30">
-          <div className="flex items-center gap-4">
-            <div className="size-12 bg-brand-gold text-brand-navy rounded-2xl flex items-center justify-center">
-              <MapPin size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-brand-navy">Ready for work?</h3>
-              <p className="text-xs text-brand-navy/70">Check in from base to start receiving navigation.</p>
-            </div>
-            <AdminButton 
-              onClick={() => {
-                if (user?.id) {
-                  technicianRepository.updateTechnician(user.id, { status: 'available' });
-                  handleCheckIn();
-                }
-              }} 
-              size="sm"
-            >
-              Check In
-            </AdminButton>
+      <AdminCard className="overflow-hidden border-none bg-brand-navy p-6 text-white">
+        <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/55">Shift readiness</p>
+            <h2 className="text-2xl font-bold">
+              {isCheckedIn ? "Field shift is active." : "Check in before you head to the first job."}
+            </h2>
+            <p className="max-w-xl text-sm text-white/70">
+              Attendance is linked to the Phase 10 field workflow API. Once checked in, today&apos;s jobs,
+              arrival GPS, report capture, payment collection, and completion flow are ready from the same module.
+            </p>
           </div>
-        </AdminCard>
-      ) : (
-        <div className="grid grid-cols-2 gap-4">
-          <KPIBlock label="Jobs Today" value={todayJobs.length.toString()} icon={<ClipboardList size={16} />} color="navy" />
-          <KPIBlock label="Completed" value={completedToday.toString()} icon={<CheckCircle2 size={16} />} color="green" />
-        </div>
-      )}
-
-      {/* Next Job Countdown */}
-      {nextJob && (
-        <AdminCard className="p-6 bg-brand-navy text-brand-gold overflow-hidden relative">
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <span className="px-3 py-1 bg-brand-gold/20 text-brand-gold text-[10px] font-bold rounded-full uppercase tracking-widest">
-                Next Job
-              </span>
-              <div className="flex items-center gap-2 text-brand-gold/60">
-                <Clock size={14} />
-                <span className="text-xs font-bold">Starts in 45m</span>
+          <div className="rounded-[28px] bg-white/8 p-5">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.24em] text-white/45">Today&apos;s status</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-white/65">Attendance</span>
+                <span className="font-semibold">{isCheckedIn ? "Checked in" : "Not checked in"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/65">Open jobs</span>
+                <span className="font-semibold">{openJobs.length}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/65">Completed</span>
+                <span className="font-semibold">{completedCount}</span>
               </div>
             </div>
-            <h2 className="text-2xl font-bold mb-1">{nextJob.srNumber}</h2>
-            <p className="text-sm opacity-80 mb-4">{nextJob.serviceType}</p>
-            <div className="flex items-center gap-2 text-xs mb-6">
-              <MapPin size={14} className="shrink-0" />
-              <span className="truncate">{nextJob.location.address}</span>
+            <div className="mt-5 flex gap-3">
+              <AdminButton
+                className="flex-1"
+                isLoading={isSubmittingAttendance}
+                onClick={() => handleTechnicianAttendance(isCheckedIn ? "check-out" : "check-in")}
+              >
+                {isCheckedIn ? "Check Out" : "Check In"}
+              </AdminButton>
             </div>
-            <AdminButton 
-              className="w-full bg-brand-gold text-brand-navy hover:bg-brand-gold/90"
-              onClick={() => navigate(`/field/job/${nextJob.id}`)}
-            >
-              View Job Details
-            </AdminButton>
-          </div>
-          <div className="absolute -right-8 -bottom-8 opacity-10">
-            <Navigation size={160} />
-          </div>
-        </AdminCard>
-      )}
-
-      {/* Today's Schedule */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-brand-navy uppercase tracking-widest">Today's Schedule</h3>
-          <button className="text-xs font-bold text-brand-gold" onClick={() => navigate('/field/jobs')}>View All</button>
-        </div>
-        <div className="space-y-4">
-          {todayJobs.map(job => (
-            <JobListItem key={job.id} job={job} onClick={() => navigate(`/field/job/${job.id}`)} />
-          ))}
-          {todayJobs.length === 0 && (
-            <div className="p-8 text-center bg-brand-navy/5 rounded-3xl border border-dashed border-border">
-              <ClipboardList size={32} className="mx-auto text-brand-muted mb-2 opacity-20" />
-              <p className="text-sm text-brand-muted">No jobs assigned for today yet.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Performance Summary */}
-      <AdminCard className="p-6">
-        <h3 className="text-sm font-bold text-brand-navy uppercase tracking-widest mb-4">Your Performance</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 text-brand-gold mb-1">
-              <Star size={14} fill="currentColor" />
-              <span className="text-lg font-bold text-brand-navy">4.8</span>
-            </div>
-            <p className="text-[9px] text-brand-muted font-bold uppercase">Rating</p>
-          </div>
-          <div className="text-center">
-            <span className="text-lg font-bold text-brand-navy block mb-1">98%</span>
-            <p className="text-[9px] text-brand-muted font-bold uppercase">SLA</p>
-          </div>
-          <div className="text-center">
-            <span className="text-lg font-bold text-brand-navy block mb-1">12</span>
-            <p className="text-[9px] text-brand-muted font-bold uppercase">Incentive</p>
           </div>
         </div>
       </AdminCard>
-    </div>
-  )
-}
 
-function KPIBlock({ label, value, icon, color }: any) {
-  return (
-    <div className={cn(
-      "p-4 rounded-3xl border",
-      color === 'navy' ? "bg-brand-navy/5 border-brand-navy/10" : "bg-status-completed/5 border-status-completed/10"
-    )}>
-      <div className={cn(
-        "size-8 rounded-xl flex items-center justify-center mb-2",
-        color === 'navy' ? "bg-brand-navy text-brand-gold" : "bg-status-completed text-white"
-      )}>
-        {icon}
+      <div className="grid gap-4 md:grid-cols-3">
+        <KpiCard label="Assigned Today" value={jobs.length} icon={<ClipboardList size={18} />} />
+        <KpiCard label="Ready to Visit" value={openJobs.length} icon={<Navigation size={18} />} />
+        <KpiCard label="Submitted" value={completedCount} icon={<ShieldCheck size={18} />} />
       </div>
-      <p className="text-2xl font-bold text-brand-navy">{value}</p>
-      <p className="text-[10px] text-brand-muted font-bold uppercase tracking-widest">{label}</p>
-    </div>
-  )
-}
 
-function JobListItem(props: any) {
-  const { job, onClick } = props;
-  return (
-    <div 
-      onClick={onClick}
-      className="p-4 bg-white border border-border rounded-3xl flex items-center gap-4 hover:border-brand-gold transition-all cursor-pointer group"
-    >
-      <div className={cn(
-        "size-12 rounded-2xl flex items-center justify-center shrink-0",
-        job.priority === 'emergency' ? "bg-status-emergency/10 text-status-emergency" : "bg-brand-navy/5 text-brand-navy"
-      )}>
-        <ClipboardList size={24} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">{job.scheduling.requestedSlot}</span>
-          {job.priority === 'emergency' && (
-            <span className="px-2 py-0.5 bg-status-emergency text-white text-[8px] font-bold rounded-full uppercase">Emergency</span>
-          )}
+      {nextJob ? (
+        <AdminCard className="rounded-[32px] border-brand-gold/25 bg-brand-gold/10 p-6">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-brand-navy/50">Next job</p>
+              <div>
+                <h3 className="text-2xl font-bold text-brand-navy">{nextJob.serviceRequestNumber}</h3>
+                <p className="text-sm text-brand-navy/70">{nextJob.serviceName}</p>
+              </div>
+              <div className="space-y-2 text-sm text-brand-navy/80">
+                <div className="flex items-center gap-2">
+                  <Clock3 size={14} className="text-brand-gold" />
+                  <span>{nextJob.slotLabel}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <MapPin size={14} className="mt-0.5 text-brand-gold" />
+                  <span>{nextJob.addressSummary}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <AdminButton onClick={() => navigate(`/field/job/${nextJob.id}`)}>Open Workflow</AdminButton>
+              <AdminButton
+                variant="secondary"
+                onClick={() => window.open(`tel:${nextJob.mobileNumber}`, "_self")}
+              >
+                <Phone size={14} /> Call Customer
+              </AdminButton>
+            </div>
+          </div>
+        </AdminCard>
+      ) : (
+        <AdminCard className="rounded-[32px] border-dashed p-8 text-center">
+          <ClipboardList size={28} className="mx-auto mb-3 text-brand-muted" />
+          <h3 className="text-base font-bold text-brand-navy">No active jobs in the current queue.</h3>
+          <p className="mt-2 text-sm text-brand-muted">New assignments will appear here as soon as dispatch confirms them.</p>
+        </AdminCard>
+      )}
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-brand-navy">Today&apos;s jobs</h3>
+            <p className="text-sm text-brand-muted">Sorted by scheduled slot from the new field workflow endpoint.</p>
+          </div>
+          <AdminButton variant="secondary" onClick={() => navigate("/field/jobs")}>
+            View All
+          </AdminButton>
         </div>
-        <h4 className="text-sm font-bold text-brand-navy truncate">{job.customer.name}</h4>
-        <p className="text-[10px] text-brand-muted truncate">{job.location.address}</p>
+
+        <div className="space-y-3">
+          {jobs.map((job) => (
+            <button
+              key={job.id}
+              className="w-full rounded-[28px] border border-border bg-white p-5 text-left transition hover:border-brand-gold/40"
+              onClick={() => navigate(`/field/job/${job.id}`)}
+            >
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h4 className="text-base font-bold text-brand-navy">{job.customerName}</h4>
+                    <StatusBadge status={job.status}>{job.currentStatus}</StatusBadge>
+                  </div>
+                  <p className="mt-1 text-sm text-brand-muted">
+                    {job.serviceRequestNumber} • {job.serviceName}
+                  </p>
+                </div>
+                <div className="space-y-1 text-sm text-brand-navy/75 md:text-right">
+                  <p className="font-medium">{job.slotLabel}</p>
+                  <p>{job.addressSummary}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
-      <ChevronRight size={18} className="text-brand-muted group-hover:text-brand-gold transition-colors" />
     </div>
-  )
+  );
+}
+
+function HelperDashboard(props: {
+  helperJob: HelperJobView | null;
+  attendance: FieldAttendanceRecord | null;
+  isSubmittingAttendance: boolean;
+  onRefresh: () => Promise<void>;
+  onAttendance: (mode: "check-in" | "check-out") => Promise<void>;
+  onOpenJob: (serviceRequestId: string) => void;
+}) {
+  const { helperJob, attendance, isSubmittingAttendance, onRefresh, onAttendance, onOpenJob } = props;
+  const isCheckedIn = Boolean(attendance?.checkInOnUtc && !attendance?.checkOutOnUtc);
+  const completedTasks = helperJob?.tasks.filter((task) => task.responseStatus.toLowerCase() !== "pending").length ?? 0;
+
+  return (
+    <div className="space-y-6 pb-24">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-brand-navy">Helper field dashboard</h1>
+          <p className="text-sm text-brand-muted">Simplified attendance, assignment, and task capture.</p>
+        </div>
+        <AdminButton variant="secondary" onClick={() => void onRefresh()}>
+          Refresh
+        </AdminButton>
+      </div>
+
+      <AdminCard className="rounded-[32px] border-brand-gold/25 bg-brand-navy p-6 text-white">
+        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Attendance</p>
+            <h2 className="mt-2 text-2xl font-bold">
+              {isCheckedIn ? "Checked in with the field team." : "Check in before helper tasks begin."}
+            </h2>
+            <p className="mt-2 text-sm text-white/65">
+              Helper mode does not expose financials, parts ordering, or customer contact. It only surfaces the
+              assignment, task checklist, attendance, and task photo capture.
+            </p>
+          </div>
+          <AdminButton
+            isLoading={isSubmittingAttendance}
+            onClick={() => void onAttendance(isCheckedIn ? "check-out" : "check-in")}
+          >
+            {isCheckedIn ? "Check Out" : "Check In"}
+          </AdminButton>
+        </div>
+      </AdminCard>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <KpiCard label="Task Responses" value={completedTasks} icon={<ClipboardList size={18} />} />
+        <KpiCard
+          label="Open Tasks"
+          value={(helperJob?.tasks.length ?? 0) - completedTasks}
+          icon={<Navigation size={18} />}
+        />
+        <KpiCard label="Attendance Logs" value={helperJob?.attendance.length ?? 0} icon={<ShieldCheck size={18} />} />
+      </div>
+
+      {helperJob?.serviceRequestId ? (
+        <AdminCard className="rounded-[32px] border p-6">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-brand-muted">Current assignment</p>
+              <div>
+                <h3 className="text-2xl font-bold text-brand-navy">{helperJob.serviceRequestNumber}</h3>
+                <p className="text-sm text-brand-navy/70">{helperJob.serviceName}</p>
+              </div>
+              <div className="space-y-2 text-sm text-brand-navy/80">
+                <div className="flex items-center gap-2">
+                  <UserCircle2 size={14} className="text-brand-gold" />
+                  <span>Lead technician: {helperJob.technicianName || "Assigned technician"}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <MapPin size={14} className="mt-0.5 text-brand-gold" />
+                  <span>{helperJob.addressSummary}</span>
+                </div>
+              </div>
+            </div>
+            <AdminButton onClick={() => onOpenJob(helperJob.serviceRequestId!)}>Open Helper View</AdminButton>
+          </div>
+        </AdminCard>
+      ) : (
+        <AdminCard className="rounded-[32px] border-dashed p-8 text-center">
+          <ClipboardList size={28} className="mx-auto mb-3 text-brand-muted" />
+          <h3 className="text-base font-bold text-brand-navy">No active helper assignment.</h3>
+          <p className="mt-2 text-sm text-brand-muted">Dispatch will surface the assigned technician job here.</p>
+        </AdminCard>
+      )}
+    </div>
+  );
+}
+
+function KpiCard(props: { label: string; value: number; icon: React.ReactNode }) {
+  return (
+    <AdminCard className="rounded-[28px] border p-5">
+      <div className="mb-4 flex size-11 items-center justify-center rounded-2xl bg-brand-navy text-brand-gold">
+        {props.icon}
+      </div>
+      <p className="text-2xl font-bold text-brand-navy">{props.value}</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-brand-muted">{props.label}</p>
+    </AdminCard>
+  );
+}
+
+function StatusBadge(props: { status: FieldJobListItem["status"]; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
+        props.status === "completed" && "bg-status-completed/10 text-status-completed",
+        props.status === "in-progress" && "bg-status-pending/10 text-status-pending",
+        props.status === "arrived" && "bg-brand-gold/15 text-brand-navy",
+        props.status === "en-route" && "bg-brand-navy/10 text-brand-navy",
+        props.status === "assigned" && "bg-brand-gold/20 text-brand-navy",
+        props.status === "cancelled" && "bg-status-emergency/10 text-status-emergency",
+      )}
+    >
+      {props.children}
+    </span>
+  );
 }

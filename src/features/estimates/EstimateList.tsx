@@ -6,7 +6,7 @@
 import * as React from "react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
+import { InlineLoader } from "@/components/shared/Layout"
 import { estimateRepository, Estimate } from "@/core/network/estimate-repository"
 import { 
   FileText, 
@@ -29,12 +29,13 @@ export default function EstimateList() {
   const [estimates, setEstimates] = React.useState<Estimate[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'approved' | 'rejected' | 'expired'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchEstimates = async () => {
       try {
         const data = await estimateRepository.getEstimates({});
-        setEstimates(data);
+        setEstimates(sortEstimates(data));
       } catch (error) {
         console.error(error);
       } finally {
@@ -44,7 +45,12 @@ export default function EstimateList() {
     fetchEstimates();
   }, [])
 
-  const filteredEstimates = estimates.filter(e => filter === 'all' || e.status === filter);
+  const filteredEstimates = estimates.filter((estimate) => {
+    const matchesFilter = filter === 'all' || estimate.status === filter;
+    const matchesSearch = [estimate.estimateNumber, estimate.srNumber, estimate.customerName]
+      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -56,7 +62,7 @@ export default function EstimateList() {
           <p className="text-sm text-brand-muted">Track and approve field service estimates</p>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<AlertCircle size={18} />}>Expiry Management</AdminButton>
+          <AdminButton variant="outline" icon={<AlertCircle size={18} />} onClick={() => setFilter('expired')}>Expiry Management</AdminButton>
         </div>
       </div>
 
@@ -67,6 +73,8 @@ export default function EstimateList() {
             type="text" 
             placeholder="Search by Estimate #, SR # or Customer..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
@@ -74,6 +82,7 @@ export default function EstimateList() {
           <FilterButton active={filter === 'pending'} onClick={() => setFilter('pending')} label="Pending" />
           <FilterButton active={filter === 'approved'} onClick={() => setFilter('approved')} label="Approved" />
           <FilterButton active={filter === 'rejected'} onClick={() => setFilter('rejected')} label="Rejected" />
+          <FilterButton active={filter === 'expired'} onClick={() => setFilter('expired')} label="Expired" />
         </div>
       </div>
 
@@ -144,6 +153,12 @@ function EstimateCard({ estimate, onClick }: { estimate: Estimate, onClick: () =
               <span className="font-bold text-brand-navy">SR: {estimate.srNumber}</span>
               <span className="size-1 bg-border rounded-full" />
               <span>{estimate.customerName}</span>
+              {estimate.expiryAt ? (
+                <>
+                  <span className="size-1 bg-border rounded-full" />
+                  <span>Expires {new Date(estimate.expiryAt).toLocaleDateString()}</span>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -170,4 +185,22 @@ function EstimateCard({ estimate, onClick }: { estimate: Estimate, onClick: () =
       </div>
     </AdminCard>
   )
+}
+
+function sortEstimates(estimates: Estimate[]) {
+  return [...estimates].sort((left, right) => {
+    if (left.status === 'pending' && right.status === 'pending') {
+      return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    }
+
+    if (left.status === 'pending') {
+      return -1;
+    }
+
+    if (right.status === 'pending') {
+      return 1;
+    }
+
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
 }

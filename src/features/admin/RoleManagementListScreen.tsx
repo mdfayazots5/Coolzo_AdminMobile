@@ -11,25 +11,33 @@ import { roleRepository, Role } from "@/core/network/role-repository"
 import { Shield, Plus, Users, ChevronRight, Lock } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { AdminButton } from "@/components/shared/AdminButton"
+import { getApiErrorMessage } from "@/core/network/api-error"
+import { useRBAC } from "@/core/auth/RBACProvider"
 
 export default function RoleManagementListScreen() {
   const [roles, setRoles] = React.useState<Role[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
+  const [errorMessage, setErrorMessage] = React.useState("")
   const navigate = useNavigate()
+  const { canCreate } = useRBAC()
+
+  const loadRoles = React.useCallback(async () => {
+    setIsLoading(true)
+    setErrorMessage("")
+
+    try {
+      const data = await roleRepository.getRoles()
+      setRoles(data)
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Unable to load roles right now"))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   React.useEffect(() => {
-    const fetchRoles = async () => {
-      try {
-        const data = await roleRepository.getRoles()
-        setRoles(data)
-      } catch (error) {
-        console.error(error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchRoles()
-  }, [])
+    void loadRoles()
+  }, [loadRoles])
 
   return (
     <div className="space-y-6">
@@ -38,18 +46,28 @@ export default function RoleManagementListScreen() {
           <h1 className="text-2xl font-bold text-brand-navy">Role Management</h1>
           <p className="text-sm text-brand-muted">Configure permissions and access matrices</p>
         </div>
-        <AdminButton 
-          onClick={() => navigate('/settings/roles/create')}
-          iconLeft={<Plus size={18} />}
-        >
-          Create Custom Role
-        </AdminButton>
+        {canCreate("settings") && (
+          <AdminButton
+            onClick={() => navigate('/settings/roles/create')}
+            iconLeft={<Plus size={18} />}
+          >
+            Create Custom Role
+          </AdminButton>
+        )}
       </div>
 
       <SectionHeader title="System & Custom Roles" />
 
       {isLoading ? (
         <InlineLoader />
+      ) : errorMessage ? (
+        <div className="rounded-3xl border border-destructive/20 bg-destructive/5 p-8 text-center space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-brand-navy">Could not load roles</h3>
+            <p className="text-sm text-brand-muted">{errorMessage}</p>
+          </div>
+          <AdminButton onClick={() => void loadRoles()}>Retry</AdminButton>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {roles.map((role, index) => (

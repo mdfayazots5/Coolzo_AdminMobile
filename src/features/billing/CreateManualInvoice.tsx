@@ -4,248 +4,231 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
-import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { invoiceRepository, InvoiceLineItem } from "@/core/network/invoice-repository"
-import { 
-  ChevronLeft, 
-  Plus, 
-  Trash2, 
-  User, 
-  Calendar, 
-  FileText,
-  Tag,
-  DollarSign,
-  Save,
-  Send
-} from "lucide-react"
-import { AdminButton } from "@/components/shared/AdminButton"
-import { cn } from "@/lib/utils"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import {
+  Calendar,
+  ChevronLeft,
+  FileText,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  User,
+} from "lucide-react"
+import { AdminCard } from "@/components/shared/Cards"
+import { SectionHeader } from "@/components/shared/Layout"
+import { AdminButton } from "@/components/shared/AdminButton"
+import { InvoiceLineItem, invoiceRepository } from "@/core/network/invoice-repository"
+import { cn } from "@/lib/utils"
+
+type CustomerType = "individual" | "corporate"
+
+const createLineItem = (id: string): InvoiceLineItem => ({
+  id,
+  description: "",
+  quantity: 1,
+  unitPrice: 0,
+  total: 0,
+  type: "service",
+  hsnSacCode: "",
+})
 
 export default function CreateManualInvoice() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
+  const [customerId, setCustomerId] = React.useState("")
   const [customerName, setCustomerName] = React.useState("")
-  const [customerType, setCustomerType] = React.useState<'individual' | 'corporate'>('individual')
+  const [customerType, setCustomerType] = React.useState<CustomerType>("individual")
   const [dueDate, setDueDate] = React.useState("")
-  const [items, setItems] = React.useState<Partial<InvoiceLineItem>[]>([
-    { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, type: 'labor' }
-  ])
   const [discount, setDiscount] = React.useState(0)
+  const [notes, setNotes] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [items, setItems] = React.useState<InvoiceLineItem[]>([createLineItem("1")])
 
-  const addItem = () => {
-    setItems([...items, { id: Date.now().toString(), description: '', quantity: 1, unitPrice: 0, total: 0, type: 'labor' }]);
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+  const taxableAmount = Math.max(subtotal - discount, 0)
+  const tax = taxableAmount * 0.18
+  const netPayable = taxableAmount + tax
+
+  const updateItem = <K extends keyof InvoiceLineItem>(id: string, field: K, value: InvoiceLineItem[K]) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              [field]: value,
+              total:
+                field === "quantity"
+                  ? (Number(value) || 0) * item.unitPrice
+                  : field === "unitPrice"
+                    ? item.quantity * (Number(value) || 0)
+                    : item.total,
+            }
+          : item,
+      ),
+    )
   }
 
-  const removeItem = (id: string) => {
-    if (items.length > 1) {
-      setItems(items.filter(item => item.id !== id));
+  const addItem = () => setItems((current) => [...current, createLineItem(Date.now().toString())])
+  const removeItem = (id: string) => setItems((current) => (current.length > 1 ? current.filter((item) => item.id !== id) : current))
+
+  const saveInvoice = async (status: "draft" | "sent") => {
+    if (!customerName.trim() || !dueDate || !customerId.trim()) {
+      toast.error("Customer, customer ID, and due date are required")
+      return
     }
-  }
 
-  const updateItem = (id: string, field: keyof InvoiceLineItem, value: any) => {
-    setItems(items.map(item => {
-      if (item.id === id) {
-        const updated = { ...item, [field]: value };
-        if (field === 'quantity' || field === 'unitPrice') {
-          updated.total = (updated.quantity || 0) * (updated.unitPrice || 0);
-        }
-        return updated;
-      }
-      return item;
-    }));
-  }
-
-  const subtotal = items.reduce((acc, item) => acc + (item.total || 0), 0);
-  const tax = (subtotal - discount) * 0.18; // 18% GST
-  const netPayable = subtotal - discount + tax;
-
-  const handleSave = async (send: boolean) => {
-    if (!customerName || !dueDate) {
-      toast.error("Please fill in customer name and due date");
-      return;
-    }
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
-      await invoiceRepository.createInvoice({
+      const invoice = await invoiceRepository.createInvoice({
+        customerId,
         customerName,
         customerType,
         dueDate,
-        items: items as InvoiceLineItem[],
+        status,
+        notes,
+        items,
         subtotal,
         discountTotal: discount,
         taxTotal: tax,
         netPayable,
-        status: 'unpaid',
-        technicianName: 'Admin (Manual)',
-        srNumber: 'MANUAL-' + Date.now().toString().slice(-5)
-      });
-      toast.success(`Invoice created ${send ? 'and sent' : ''} successfully`);
-      navigate('/billing/invoices');
+        technicianName: "Billing Team",
+        srNumber: `MANUAL-${Date.now().toString().slice(-5)}`,
+      })
+      toast.success(status === "draft" ? "Invoice draft saved" : "Invoice generated and sent")
+      navigate(`/billing/invoices/${invoice.id}`)
     } catch (error) {
-      toast.error("Failed to create invoice");
+      toast.error("Unable to save invoice")
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-brand-navy/5 rounded-xl transition-colors">
+          <button onClick={() => navigate(-1)} className="rounded-xl p-2 transition-colors hover:bg-brand-navy/5">
             <ChevronLeft size={20} className="text-brand-navy" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-brand-navy">Create Manual Invoice</h1>
-            <p className="text-sm text-brand-muted">Generate a new tax invoice for standalone services</p>
+            <p className="text-sm text-brand-muted">Manual billing for standalone jobs, proforma, and corporate requests</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<Save size={18} />} onClick={() => handleSave(false)} disabled={isSubmitting}>Save as Draft</AdminButton>
-          <AdminButton icon={<Send size={18} />} onClick={() => handleSave(true)} disabled={isSubmitting}>Generate & Send</AdminButton>
+          <AdminButton variant="outline" icon={<Save size={18} />} disabled={isSubmitting} onClick={() => saveInvoice("draft")}>
+            Save Draft
+          </AdminButton>
+          <AdminButton icon={<Send size={18} />} disabled={isSubmitting} onClick={() => saveInvoice("sent")}>
+            Generate & Send
+          </AdminButton>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Customer & Settings */}
-        <div className="lg:col-span-1 space-y-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="space-y-6">
           <AdminCard className="p-6">
             <SectionHeader title="Customer Details" icon={<User size={18} />} />
             <div className="mt-6 space-y-4">
+              <Field label="Customer ID" value={customerId} onChange={setCustomerId} placeholder="CUST-10001" />
+              <Field label="Customer Name" value={customerName} onChange={setCustomerName} placeholder="Customer full name" />
               <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Customer Name</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter full name..."
-                  className="w-full px-4 py-3 bg-brand-navy/5 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Customer Type</label>
+                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Customer Type</label>
                 <div className="flex gap-2">
-                  <button 
-                    onClick={() => setCustomerType('individual')}
-                    className={cn(
-                      "flex-1 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all",
-                      customerType === 'individual' ? "bg-brand-navy text-brand-gold" : "bg-brand-navy/5 text-brand-muted"
-                    )}
-                  >
-                    Individual
-                  </button>
-                  <button 
-                    onClick={() => setCustomerType('corporate')}
-                    className={cn(
-                      "flex-1 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all",
-                      customerType === 'corporate' ? "bg-brand-navy text-brand-gold" : "bg-brand-navy/5 text-brand-muted"
-                    )}
-                  >
-                    Corporate
-                  </button>
+                  <TypeButton active={customerType === "individual"} label="Individual" onClick={() => setCustomerType("individual")} />
+                  <TypeButton active={customerType === "corporate"} label="Corporate" onClick={() => setCustomerType("corporate")} />
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Due Date</label>
-                <input 
-                  type="date" 
-                  className="w-full px-4 py-3 bg-brand-navy/5 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Due Date</label>
+                <input
+                  type="date"
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+                  onChange={(event) => setDueDate(event.target.value)}
+                  className="w-full rounded-2xl bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
                 />
               </div>
             </div>
           </AdminCard>
 
-          <AdminCard className="p-6 bg-brand-gold/5 border-2 border-brand-gold/20">
-            <SectionHeader title="Billing Notes" icon={<FileText size={18} />} />
-            <textarea 
-              placeholder="Internal notes or customer instructions..."
-              className="w-full mt-4 p-4 bg-white border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all min-h-[120px]"
-            />
+          <AdminCard className="p-6">
+            <SectionHeader title="Discount & Notes" icon={<Calendar size={18} />} />
+            <div className="mt-6 space-y-4">
+              <div>
+                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Manual Discount</label>
+                <input
+                  type="number"
+                  value={discount}
+                  onChange={(event) => setDiscount(Number(event.target.value) || 0)}
+                  className="w-full rounded-2xl bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+                />
+              </div>
+              <div>
+                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Billing Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Internal notes or payment instructions..."
+                  className="min-h-[160px] w-full rounded-2xl bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+                />
+              </div>
+            </div>
           </AdminCard>
         </div>
 
-        {/* Right Column: Line Items */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 xl:col-span-2">
           <AdminCard className="p-8">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between">
               <SectionHeader title="Invoice Line Items" icon={<FileText size={18} />} />
-              <AdminButton variant="outline" size="sm" icon={<Plus size={14} />} onClick={addItem}>Add Item</AdminButton>
+              <AdminButton variant="outline" size="sm" icon={<Plus size={14} />} onClick={addItem}>
+                Add Item
+              </AdminButton>
             </div>
-            
-            <div className="space-y-4">
-              {items.map((item, idx) => (
-                <div key={item.id} className="flex flex-col md:flex-row gap-4 p-4 bg-brand-navy/5 rounded-2xl relative group">
-                  <div className="flex-1">
-                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-2 mb-1 block">Description</label>
-                    <input 
-                      type="text" 
-                      placeholder="Service or part description..."
-                      className="w-full px-3 py-2 bg-white border-none rounded-xl text-sm focus:ring-2 focus:ring-brand-gold outline-none"
-                      value={item.description}
-                      onChange={(e) => updateItem(item.id!, 'description', e.target.value)}
-                    />
-                  </div>
-                  <div className="w-full md:w-24">
-                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-2 mb-1 block">Qty</label>
-                    <input 
-                      type="number" 
-                      className="w-full px-3 py-2 bg-white border-none rounded-xl text-sm focus:ring-2 focus:ring-brand-gold outline-none text-center"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(item.id!, 'quantity', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="w-full md:w-32">
-                    <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-2 mb-1 block">Unit Price</label>
-                    <input 
-                      type="number" 
-                      className="w-full px-3 py-2 bg-white border-none rounded-xl text-sm focus:ring-2 focus:ring-brand-gold outline-none text-right"
-                      value={item.unitPrice}
-                      onChange={(e) => updateItem(item.id!, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="w-full md:w-32 flex flex-col justify-end items-end pr-8">
-                    <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-1">Total</p>
-                    <p className="text-sm font-bold text-brand-navy">₹{(item.total || 0).toLocaleString()}</p>
-                  </div>
-                  {items.length > 1 && (
-                    <button 
-                      onClick={() => removeItem(item.id!)}
-                      className="absolute top-2 right-2 p-1 text-brand-muted hover:text-status-emergency transition-colors opacity-0 group-hover:opacity-100"
+
+            <div className="mt-6 space-y-4">
+              {items.map((item) => (
+                <div key={item.id} className="grid grid-cols-1 gap-4 rounded-3xl bg-brand-navy/5 p-5 lg:grid-cols-[1fr_130px_100px_130px_48px]">
+                  <Field label="Description" value={item.description} onChange={(value) => updateItem(item.id, "description", value)} placeholder="Service or part description" compact />
+                  <Field label="HSN / SAC" value={item.hsnSacCode ?? ""} onChange={(value) => updateItem(item.id, "hsnSacCode", value)} placeholder="9987" compact />
+                  <NumericField label="Qty" value={item.quantity} onChange={(value) => updateItem(item.id, "quantity", value)} compact />
+                  <NumericField label="Unit Price" value={item.unitPrice} onChange={(value) => updateItem(item.id, "unitPrice", value)} compact />
+                  <div className="flex items-end justify-end">
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="rounded-xl p-2 text-brand-muted transition-colors hover:bg-status-emergency/10 hover:text-status-emergency"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
-                  )}
+                  </div>
+                  <div className="lg:col-span-5 flex flex-col gap-3 border-t border-white/70 pt-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex gap-2">
+                      {(["service", "part", "visit_charge"] as const).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => updateItem(item.id, "type", type)}
+                          className={cn(
+                            "rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all",
+                            item.type === type ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted",
+                          )}
+                        >
+                          {type.replace("_", " ")}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-sm font-bold text-brand-navy">Line Total: ₹{item.total.toLocaleString()}</p>
+                  </div>
                 </div>
               ))}
             </div>
 
             <div className="mt-8 flex justify-end">
               <div className="w-full max-w-xs space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">Subtotal</span>
-                  <span className="text-sm font-bold text-brand-navy">₹{subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center text-status-emergency">
-                  <span className="text-xs font-bold uppercase tracking-widest">Discount</span>
-                  <input 
-                    type="number" 
-                    className="w-24 px-2 py-1 bg-brand-navy/5 border-none rounded-lg text-sm text-right focus:ring-2 focus:ring-brand-gold outline-none"
-                    value={discount}
-                    onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">Tax (18% GST)</span>
-                  <span className="text-sm font-bold text-brand-navy">₹{tax.toLocaleString()}</span>
-                </div>
-                <div className="h-px bg-border pt-2" />
-                <div className="flex justify-between items-center">
+                <SummaryRow label="Subtotal" value={subtotal} />
+                <SummaryRow label="Discount" value={discount} danger />
+                <SummaryRow label="Tax (18%)" value={tax} />
+                <div className="h-px bg-border" />
+                <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-brand-navy">Net Payable</span>
                   <span className="text-2xl font-bold text-brand-navy">₹{netPayable.toLocaleString()}</span>
                 </div>
@@ -254,6 +237,82 @@ export default function CreateManualInvoice() {
           </AdminCard>
         </div>
       </div>
+    </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  compact = false,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  compact?: boolean
+}) {
+  return (
+    <div>
+      <label className={cn("mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted", compact && "ml-2")}>{label}</label>
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl bg-white px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+      />
+    </div>
+  )
+}
+
+function NumericField({
+  label,
+  value,
+  onChange,
+  compact = false,
+}: {
+  label: string
+  value: number
+  onChange: (value: number) => void
+  compact?: boolean
+}) {
+  return (
+    <div>
+      <label className={cn("mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted", compact && "ml-2")}>{label}</label>
+      <input
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value) || 0)}
+        className="w-full rounded-2xl bg-white px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+      />
+    </div>
+  )
+}
+
+function TypeButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 rounded-2xl py-3 text-xs font-bold uppercase tracking-widest transition-all",
+        active ? "bg-brand-navy text-brand-gold" : "bg-brand-navy/5 text-brand-muted",
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
+function SummaryRow({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-bold uppercase tracking-widest text-brand-muted">{label}</span>
+      <span className={cn("text-sm font-bold", danger ? "text-status-emergency" : "text-brand-navy")}>
+        {danger ? "-" : ""}₹{value.toLocaleString()}
+      </span>
     </div>
   )
 }

@@ -4,137 +4,282 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
+import { useNavigate } from "react-router-dom"
+import { Search, Plus, Users } from "lucide-react"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { FilterBar } from "@/components/shared/Filters"
-import { UserCard } from "@/components/shared/UserCard"
 import { AdminTextField } from "@/components/shared/AdminTextField"
-import { userRepository, User } from "@/core/network/user-repository"
-import { Search, Plus, Users } from "lucide-react"
-import { useNavigate } from "react-router-dom"
 import { AdminButton } from "@/components/shared/AdminButton"
-import { UserRole } from "@/store/auth-store"
+import { AdminCard } from "@/components/shared/Cards"
+import { AdminDataTable } from "@/components/shared/AdminDataTable"
+import { AdminDropdown } from "@/components/shared/Pickers"
+import { StatusBadge, RoleBadge } from "@/components/shared/Badges"
+import { branchRepository, Branch } from "@/core/network/branch-repository"
+import { userRepository, User } from "@/core/network/user-repository"
+import { roleRepository, Role } from "@/core/network/role-repository"
+import { getApiErrorMessage } from "@/core/network/api-error"
+import { formatDate } from "@/lib/utils"
+import { useRBAC } from "@/core/auth/RBACProvider"
+
+const PAGE_SIZE = 12
+
+const statusOptions = [
+  { label: "All statuses", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Inactive", value: "inactive" },
+] as const
+
+const sortOptions = [
+  { label: "Name A-Z", value: "name:asc" },
+  { label: "Name Z-A", value: "name:desc" },
+  { label: "Newest joined", value: "createdAt:desc" },
+  { label: "Recent login", value: "lastLogin:desc" },
+]
+
+type SortValue = typeof sortOptions[number]["value"]
 
 export default function UserManagementListScreen() {
+  const navigate = useNavigate()
+  const { canCreate } = useRBAC()
   const [users, setUsers] = React.useState<User[]>([])
+  const [roles, setRoles] = React.useState<Role[]>([])
+  const [branches, setBranches] = React.useState<Branch[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [activeFilters, setActiveFilters] = React.useState<string[]>([])
-  const navigate = useNavigate()
+  const [selectedRoleIds, setSelectedRoleIds] = React.useState<string[]>([])
+  const [selectedBranchId, setSelectedBranchId] = React.useState("all")
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "active" | "inactive">("all")
+  const [pageNumber, setPageNumber] = React.useState(1)
+  const [sortValue, setSortValue] = React.useState<SortValue>("name:asc")
+  const [errorMessage, setErrorMessage] = React.useState("")
+  const deferredSearchQuery = React.useDeferredValue(searchQuery)
 
-  const filters = [
-    { id: 'SUPER_ADMIN', label: 'Super Admins', isActive: activeFilters.includes('SUPER_ADMIN') },
-    { id: 'OPS_MANAGER', label: 'Ops Managers', isActive: activeFilters.includes('OPS_MANAGER') },
-    { id: 'TECHNICIAN', label: 'Technicians', isActive: activeFilters.includes('TECHNICIAN') },
-    { id: 'SUPPORT', label: 'Support', isActive: activeFilters.includes('SUPPORT') },
-    { id: 'active', label: 'Active Only', isActive: activeFilters.includes('active') },
-    { id: 'inactive', label: 'Inactive Only', isActive: activeFilters.includes('inactive') },
-  ];
+  const branchNameById = React.useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch.name])),
+    [branches]
+  )
 
-  React.useEffect(() => {
-    const fetchUsers = async () => {
-      setIsLoading(true)
-      try {
-        const data = await userRepository.getUsers({})
-        setUsers(data)
-      } catch (error) {
-        console.error(error)
-      } finally {
-        setIsLoading(false)
-      }
+  const loadDependencies = React.useCallback(async () => {
+    try {
+      const [roleData, branchData] = await Promise.all([
+        roleRepository.getRoles(),
+        branchRepository.getBranches(),
+      ])
+
+      setRoles(roleData)
+      setBranches(branchData)
+    } catch (error) {
+      console.error(error)
     }
-    fetchUsers()
   }, [])
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         user.employeeId?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const roleFilters = activeFilters.filter(f => Object.values(UserRole).includes(f as UserRole));
-    const matchesRole = roleFilters.length === 0 || roleFilters.includes(user.role);
-    
-    const statusFilters = activeFilters.filter(f => ['active', 'inactive'].includes(f));
-    const matchesStatus = statusFilters.length === 0 || statusFilters.includes(user.status);
+  const loadUsers = React.useCallback(async () => {
+    setIsLoading(true)
+    setErrorMessage("")
 
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+    try {
+      const [sortBy, sortOrder] = sortValue.split(":") as [UserListSortBy, UserListSortOrder]
+      const data = await userRepository.getUsers({
+        pageNumber,
+        pageSize: PAGE_SIZE,
+        searchTerm: deferredSearchQuery.trim() || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        roleIds: selectedRoleIds,
+        branchIds: selectedBranchId === "all" ? undefined : [selectedBranchId],
+        sortBy,
+        sortOrder,
+      })
+
+      setUsers(data)
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Unable to load users right now"))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [deferredSearchQuery, pageNumber, selectedBranchId, selectedRoleIds, sortValue, statusFilter])
+
+  React.useEffect(() => {
+    void loadDependencies()
+  }, [loadDependencies])
+
+  React.useEffect(() => {
+    void loadUsers()
+  }, [loadUsers])
+
+  React.useEffect(() => {
+    setPageNumber(1)
+  }, [deferredSearchQuery, selectedBranchId, selectedRoleIds, sortValue, statusFilter])
+
+  const filters = [
+    ...roles.map((role) => ({
+      id: `role:${role.id}`,
+      label: role.name,
+      isActive: selectedRoleIds.includes(role.id),
+    })),
+    { id: "status:active", label: "Active Only", isActive: statusFilter === "active" },
+    { id: "status:inactive", label: "Inactive Only", isActive: statusFilter === "inactive" },
+  ]
 
   const handleFilterToggle = (id: string) => {
-    setActiveFilters(prev => 
-      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
-    );
-  };
+    if (id.startsWith("role:")) {
+      const roleId = id.replace("role:", "")
+      setSelectedRoleIds((current) =>
+        current.includes(roleId)
+          ? current.filter((value) => value !== roleId)
+          : [...current, roleId]
+      )
+      return
+    }
+
+    if (id === "status:active") {
+      setStatusFilter((current) => current === "active" ? "all" : "active")
+      return
+    }
+
+    if (id === "status:inactive") {
+      setStatusFilter((current) => current === "inactive" ? "all" : "inactive")
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">User Management</h1>
-          <p className="text-sm text-brand-muted">Onboard and manage access for all internal staff</p>
+          <p className="text-sm text-brand-muted">
+            Manage internal identities, access roles, branch scope, and account status.
+          </p>
         </div>
-        <AdminButton 
-          onClick={() => navigate('/settings/users/create')}
-          iconLeft={<Plus size={18} />}
-        >
-          Add New User
-        </AdminButton>
+        {canCreate("settings") && (
+          <AdminButton onClick={() => navigate("/settings/users/create")} iconLeft={<Plus size={18} />}>
+            Add New User
+          </AdminButton>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2">
-          <AdminTextField
-            placeholder="Search by name, email or employee ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            prefixIcon={<Search size={18} />}
-            className="bg-white"
-          />
-        </div>
-        <div className="flex items-center gap-4 bg-brand-navy/5 px-4 py-2 rounded-xl border border-brand-navy/10">
-          <div className="p-2 bg-brand-navy rounded-lg text-brand-gold">
+      <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+        <AdminTextField
+          label="Search Users"
+          placeholder="Search by name, username, or email..."
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          prefixIcon={<Search size={18} />}
+          className="bg-white"
+        />
+        <div className="flex items-center gap-4 rounded-lg border border-brand-navy/10 bg-brand-navy/5 px-4 py-2">
+          <div className="rounded-lg bg-brand-navy p-2 text-brand-gold">
             <Users size={20} />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-muted">Total Users</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-muted">Loaded Users</p>
             <p className="text-lg font-bold text-brand-navy">{users.length}</p>
           </div>
         </div>
       </div>
 
-      <FilterBar 
-        filters={filters} 
+      <div className="grid gap-4 md:grid-cols-3">
+        <AdminDropdown
+          label="Branch"
+          options={[
+            { label: "All branches", value: "all" },
+            ...branches.map((branch) => ({ label: branch.name, value: branch.id })),
+          ]}
+          value={selectedBranchId}
+          onChange={setSelectedBranchId}
+        />
+        <AdminDropdown
+          label="Status"
+          options={statusOptions.map((option) => ({ label: option.label, value: option.value }))}
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+        />
+        <AdminDropdown
+          label="Sort By"
+          options={sortOptions}
+          value={sortValue}
+          onChange={(value) => setSortValue(value as SortValue)}
+        />
+      </div>
+
+      <FilterBar
+        filters={filters}
         onFilterToggle={handleFilterToggle}
-        onClearAll={() => setActiveFilters([])}
+        onClearAll={() => {
+          setSelectedRoleIds([])
+          setStatusFilter("all")
+          setSelectedBranchId("all")
+          setSortValue("name:asc")
+        }}
       />
 
       <SectionHeader title="System Users" />
 
       {isLoading ? (
         <InlineLoader />
-      ) : filteredUsers.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredUsers.map((user, index) => (
-            <motion.div
-              key={user.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <UserCard 
-                user={user} 
-                onClick={() => navigate(`/settings/users/${user.id}`)}
-              />
-            </motion.div>
-          ))}
+      ) : errorMessage ? (
+        <div className="space-y-4 rounded-lg border border-destructive/20 bg-destructive/5 p-8 text-center">
+          <div>
+            <h3 className="text-lg font-bold text-brand-navy">Could not load users</h3>
+            <p className="text-sm text-brand-muted">{errorMessage}</p>
+          </div>
+          <AdminButton onClick={() => void loadUsers()}>Retry</AdminButton>
         </div>
       ) : (
-        <div className="text-center py-20 bg-brand-navy/[0.02] rounded-3xl border-2 border-dashed border-brand-navy/10">
-          <Users size={48} className="mx-auto text-brand-muted/30 mb-4" />
-          <h3 className="text-lg font-bold text-brand-navy">No users found</h3>
-          <p className="text-sm text-brand-muted">Try adjusting your search or filters</p>
-        </div>
+        <AdminCard className="p-4 sm:p-6">
+          <AdminDataTable<User>
+            columns={[
+              {
+                header: "User",
+                accessorKey: "name",
+                cell: (user) => (
+                  <div>
+                    <p className="font-bold text-brand-navy">{user.name}</p>
+                    <p className="text-xs text-brand-muted">{user.userName}</p>
+                  </div>
+                ),
+              },
+              {
+                header: "Role",
+                accessorKey: "roleLabel",
+                cell: (user) => <RoleBadge role={user.role} label={user.roleLabel} />,
+              },
+              {
+                header: "Branch",
+                accessorKey: "branchId",
+                cell: (user) => branchNameById.get(user.branchId) || `Branch ${user.branchId}`,
+              },
+              {
+                header: "Status",
+                accessorKey: "status",
+                cell: (user) => (
+                  <StatusBadge status={user.status === "active" ? "completed" : "closed"}>
+                    {user.status}
+                  </StatusBadge>
+                ),
+              },
+              {
+                header: "Last Login",
+                accessorKey: "lastLogin",
+                cell: (user) => user.lastLogin ? formatDate(user.lastLogin) : "No login yet",
+              },
+              {
+                header: "Joined",
+                accessorKey: "createdAt",
+                cell: (user) => formatDate(user.createdAt),
+              },
+            ]}
+            data={users}
+            onRowClick={(user) => navigate(`/settings/users/${user.id}`)}
+            pageNumber={pageNumber}
+            onPageChange={setPageNumber}
+            hasNextPage={users.length === PAGE_SIZE}
+            resultLabel={`Page ${pageNumber}`}
+          />
+        </AdminCard>
       )}
     </div>
   )
 }
+
+type UserListSortBy = "name" | "createdAt" | "lastLogin"
+type UserListSortOrder = "asc" | "desc"

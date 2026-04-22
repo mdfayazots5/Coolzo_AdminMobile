@@ -4,112 +4,104 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
-import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { supportRepository, Feedback } from "@/core/network/support-repository"
-import { 
-  ChevronLeft, 
-  Star, 
-  User, 
-  Wrench, 
-  MessageSquare, 
-  ExternalLink, 
-  AlertCircle, 
-  CheckCircle2,
-  Send,
-  Eye,
-  EyeOff,
-  Flag
-} from "lucide-react"
-import { AdminButton } from "@/components/shared/AdminButton"
-import { cn } from "@/lib/utils"
-import { useParams, useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
+import { ChevronLeft, ExternalLink, Flag, Send, Star } from "lucide-react"
+import { AdminCard } from "@/components/shared/Cards"
+import { AdminButton } from "@/components/shared/AdminButton"
+import { InlineLoader, SectionHeader } from "@/components/shared/Layout"
+import { Feedback, supportRepository } from "@/core/network/support-repository"
+import { cn } from "@/lib/utils"
 
 export default function FeedbackDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id } = useParams()
+  const navigate = useNavigate()
   const [feedback, setFeedback] = React.useState<Feedback | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [response, setResponse] = React.useState("")
 
   React.useEffect(() => {
-    const fetchFeedback = async () => {
-      if (!id) return;
+    const loadFeedback = async () => {
+      if (!id) {
+        return
+      }
       try {
-        const data = await supportRepository.getFeedbackById(id);
-        setFeedback(data);
-        if (data?.adminResponse) setResponse(data.adminResponse);
+        const data = await supportRepository.getFeedbackById(id)
+        setFeedback(data)
+        setResponse(data?.adminResponse ?? "")
       } catch (error) {
-        console.error(error);
+        console.error(error)
+        toast.error("Unable to load feedback")
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
     }
-    fetchFeedback();
+
+    void loadFeedback()
   }, [id])
 
-  const handleRespond = async () => {
-    if (!feedback || !response.trim()) return;
-    try {
-      await supportRepository.respondToFeedback(feedback.id, response);
-      setFeedback({ ...feedback, adminResponse: response });
-      toast.success("Response saved and published");
-    } catch (error) {
-      toast.error("Failed to save response");
-    }
+  if (isLoading) {
+    return <InlineLoader className="h-screen" />
   }
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
-  if (!feedback) return <div className="p-8 text-center">Feedback not found</div>;
+  if (!feedback) {
+    return <div className="p-8 text-center">Feedback not found</div>
+  }
+
+  const handleSaveResponse = async () => {
+    const updated = await supportRepository.respondToFeedback(feedback.id, response)
+    setFeedback(updated)
+    toast.success("Admin response saved")
+  }
+
+  const handlePublishToggle = async () => {
+    const updated = await supportRepository.publishFeedback(feedback.id, feedback.status !== "published")
+    setFeedback(updated)
+    toast.success(updated.status === "published" ? "Review published" : "Review unpublished")
+  }
+
+  const handleFlag = async () => {
+    const updated = await supportRepository.flagFeedback(feedback.id, "Flagged from admin mobile")
+    setFeedback(updated)
+    toast.success("Review flagged")
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-brand-navy/5 rounded-xl transition-colors">
+          <button onClick={() => navigate(-1)} className="rounded-xl p-2 transition-colors hover:bg-brand-navy/5">
             <ChevronLeft size={20} className="text-brand-navy" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-brand-navy">Feedback Detail</h1>
-            <p className="text-sm text-brand-muted">Review from {feedback.customerName} for {feedback.srNumber}</p>
+            <p className="text-sm text-brand-muted">{feedback.customerName} • {feedback.srNumber}</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={feedback.status === 'published' ? <EyeOff size={18} /> : <Eye size={18} />}>
-            {feedback.status === 'published' ? 'Unpublish' : 'Publish'}
+          <AdminButton variant="outline" onClick={handlePublishToggle}>
+            {feedback.status === "published" ? "Unpublish" : "Publish"}
           </AdminButton>
-          <AdminButton variant="outline" className="text-status-emergency border-status-emergency/20" icon={<Flag size={18} />}>Flag for Quality Review</AdminButton>
+          <AdminButton variant="outline" className="border-status-emergency/20 text-status-emergency" icon={<Flag size={18} />} onClick={handleFlag}>
+            Flag
+          </AdminButton>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="space-y-6">
           <AdminCard className="p-6">
             <SectionHeader title="Service Context" icon={<ExternalLink size={18} />} />
             <div className="mt-4 space-y-4">
-              <div>
-                <p className="text-[10px] text-brand-muted font-bold uppercase tracking-widest mb-1">Service Request</p>
-                <AdminButton variant="ghost" size="sm" className="w-full justify-start px-0 text-brand-navy font-bold">
-                  {feedback.srNumber} <ExternalLink size={14} className="ml-2" />
-                </AdminButton>
-              </div>
-              <div>
-                <p className="text-[10px] text-brand-muted font-bold uppercase tracking-widest mb-1">Technician</p>
-                <AdminButton variant="ghost" size="sm" className="w-full justify-start px-0 text-brand-navy font-bold">
-                  <Wrench size={14} className="mr-2" /> {feedback.technicianName} <ExternalLink size={14} className="ml-2" />
-                </AdminButton>
-              </div>
-              <div>
-                <p className="text-[10px] text-brand-muted font-bold uppercase tracking-widest mb-1">Date</p>
-                <p className="text-sm font-bold text-brand-navy">{new Date(feedback.date).toLocaleDateString()}</p>
-              </div>
+              <InfoRow label="SR" value={feedback.srNumber} />
+              <InfoRow label="Technician" value={feedback.technicianName} />
+              <InfoRow label="Date" value={new Date(feedback.date).toLocaleDateString()} />
+              <InfoRow label="Status" value={feedback.status} />
             </div>
           </AdminCard>
 
           <AdminCard className="p-6">
-            <SectionHeader title="Sub-Ratings" icon={<Star size={18} />} />
+            <SectionHeader title="Sub Ratings" icon={<Star size={18} />} />
             <div className="mt-4 space-y-4">
               <RatingRow label="Punctuality" rating={feedback.subRatings.punctuality} />
               <RatingRow label="Professionalism" rating={feedback.subRatings.professionalism} />
@@ -118,45 +110,33 @@ export default function FeedbackDetail() {
           </AdminCard>
         </div>
 
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 xl:col-span-2">
           <AdminCard className="p-8">
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6 flex items-center justify-between">
               <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map(s => (
-                  <Star key={s} size={24} className={cn(s <= feedback.rating ? "text-brand-gold fill-brand-gold" : "text-border")} />
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star key={star} size={24} className={cn(star <= feedback.rating ? "fill-brand-gold text-brand-gold" : "text-border")} />
                 ))}
               </div>
-              <span className={cn(
-                "px-3 py-1 rounded-full text-xs font-bold uppercase",
-                feedback.isNegative ? "bg-status-emergency/10 text-status-emergency" : "bg-status-completed/10 text-status-completed"
-              )}>
-                {feedback.rating} / 5 Rating
+              <span className={cn("rounded-full px-3 py-1 text-xs font-bold uppercase tracking-widest", feedback.isNegative ? "bg-status-emergency/10 text-status-emergency" : "bg-status-completed/10 text-status-completed")}>
+                {feedback.rating} / 5
               </span>
             </div>
-            <div className="p-6 bg-brand-navy/5 rounded-3xl italic text-brand-navy leading-relaxed">
-              "{feedback.reviewText}"
-            </div>
+            <div className="rounded-3xl bg-brand-navy/5 p-6 italic text-brand-navy">"{feedback.reviewText}"</div>
           </AdminCard>
 
           <AdminCard className="p-8">
-            <SectionHeader title="Admin Response" icon={<MessageSquare size={18} />} />
-            <p className="text-xs text-brand-muted mt-2 mb-6">This response will be visible to the customer and on the public website.</p>
-            <div className="space-y-4">
-              <textarea 
-                placeholder="Type your response to the customer..."
-                className="w-full p-4 bg-brand-navy/5 border-none rounded-3xl text-sm focus:ring-2 focus:ring-brand-gold outline-none min-h-[150px] resize-none"
-                value={response}
-                onChange={(e) => setResponse(e.target.value)}
-              />
-              <div className="flex justify-end">
-                <AdminButton 
-                  onClick={handleRespond}
-                  disabled={!response.trim() || response === feedback.adminResponse}
-                  icon={<Send size={18} />}
-                >
-                  Save & Publish Response
-                </AdminButton>
-              </div>
+            <SectionHeader title="Admin Response" icon={<Send size={18} />} />
+            <textarea
+              value={response}
+              onChange={(event) => setResponse(event.target.value)}
+              placeholder="Type your response to the customer..."
+              className="mt-6 min-h-[180px] w-full rounded-3xl bg-brand-navy/5 p-4 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+            />
+            <div className="mt-4 flex justify-end">
+              <AdminButton icon={<Send size={18} />} onClick={handleSaveResponse}>
+                Save Response
+              </AdminButton>
             </div>
           </AdminCard>
         </div>
@@ -165,13 +145,22 @@ export default function FeedbackDetail() {
   )
 }
 
-function RatingRow({ label, rating }: { label: string, rating: number }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-xs font-bold uppercase tracking-widest text-brand-muted">{label}</span>
+      <span className="text-right text-sm font-bold capitalize text-brand-navy">{value}</span>
+    </div>
+  )
+}
+
+function RatingRow({ label, rating }: { label: string; rating: number }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">{label}</span>
+      <span className="text-xs font-bold uppercase tracking-widest text-brand-muted">{label}</span>
       <div className="flex gap-0.5">
-        {[1, 2, 3, 4, 5].map(s => (
-          <Star key={s} size={10} className={cn(s <= rating ? "text-brand-gold fill-brand-gold" : "text-border")} />
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star key={star} size={10} className={cn(star <= rating ? "fill-brand-gold text-brand-gold" : "text-border")} />
         ))}
       </div>
     </div>

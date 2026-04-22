@@ -7,14 +7,11 @@ import * as React from "react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { amcRepository, AMCContract } from "@/core/network/amc-repository"
+import { amcRepository, AMCContract, AMCRenewalDisposition } from "@/core/network/amc-repository"
 import { 
   RefreshCw, 
   Search, 
-  Filter, 
-  Bell, 
   MessageSquare, 
-  ChevronRight,
   AlertCircle,
   TrendingUp,
   Users,
@@ -31,6 +28,7 @@ export default function AMCRenewalManagement() {
   const [queue, setQueue] = React.useState<AMCContract[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchQueue = async () => {
@@ -51,11 +49,37 @@ export default function AMCRenewalManagement() {
   }
 
   const handleBulkReminder = () => {
-    toast.success(`Sent renewal reminders to ${selectedIds.length} customers via WhatsApp`);
-    setSelectedIds([]);
-  }
+    amcRepository.bulkSendRenewalReminders(selectedIds)
+      .then(() => {
+        toast.success(`Sent renewal reminders to ${selectedIds.length} customers via WhatsApp`);
+        setSelectedIds([]);
+      })
+      .catch(() => {
+        toast.error("Failed to send bulk reminders");
+      });
+  };
+
+  const handleDisposition = async (contractId: string, disposition: AMCRenewalDisposition) => {
+    try {
+      await amcRepository.updateRenewalDisposition(contractId, disposition);
+      setQueue((current) =>
+        current.map((contract) =>
+          contract.id === contractId ? { ...contract, renewalDisposition: disposition } : contract
+        )
+      );
+      toast.success(`Renewal marked ${disposition.replace('_', ' ')}`);
+    } catch {
+      toast.error("Failed to update renewal status");
+    }
+  };
 
   if (isLoading) return <InlineLoader className="h-screen" />;
+
+  const filteredQueue = queue.filter((contract) =>
+    [contract.customerName, contract.contractNumber, contract.customerPhone]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
     <div className="space-y-6">
@@ -106,6 +130,8 @@ export default function AMCRenewalManagement() {
             type="text" 
             placeholder="Search expiring contracts..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2">
@@ -115,7 +141,7 @@ export default function AMCRenewalManagement() {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {queue.map((contract, idx) => (
+        {filteredQueue.map((contract, idx) => (
           <motion.div
             key={contract.id}
             initial={{ opacity: 0, y: 20 }}
@@ -127,6 +153,7 @@ export default function AMCRenewalManagement() {
               selected={selectedIds.includes(contract.id)}
               onSelect={() => toggleSelect(contract.id)}
               onRenew={() => navigate(`/amc/enroll?renew=${contract.id}`)}
+              onDisposition={handleDisposition}
             />
           </motion.div>
         ))}
@@ -167,7 +194,7 @@ function FilterButton({ active, label }: any) {
   )
 }
 
-function RenewalCard({ contract, selected, onSelect, onRenew }: any) {
+function RenewalCard({ contract, selected, onSelect, onRenew, onDisposition }: any) {
   return (
     <AdminCard className={cn(
       "p-6 hover:shadow-xl transition-all group border-2",
@@ -185,7 +212,7 @@ function RenewalCard({ contract, selected, onSelect, onRenew }: any) {
             {selected && <TrendingUp size={14} />}
           </div>
           <div>
-            <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-3 mb-1">
               <h3 className="font-bold text-brand-navy">{contract.customerName}</h3>
               <span className="px-2 py-0.5 bg-status-pending/10 text-status-pending rounded-full text-[10px] font-bold uppercase">
                 Expires in 12 Days
@@ -211,13 +238,16 @@ function RenewalCard({ contract, selected, onSelect, onRenew }: any) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
-            <MessageSquare size={20} />
-          </button>
-          <AdminButton onClick={onRenew}>Renew Now</AdminButton>
+          <div className="flex items-center gap-3">
+            <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
+              <MessageSquare size={20} />
+            </button>
+            <AdminButton variant="outline" onClick={() => onDisposition(contract.id, 'negotiating')}>Negotiating</AdminButton>
+            <AdminButton variant="outline" onClick={() => onDisposition(contract.id, 'declined')}>Declined</AdminButton>
+            <AdminButton variant="outline" onClick={() => onDisposition(contract.id, 'renewed')}>Renewed</AdminButton>
+            <AdminButton onClick={onRenew}>Renew Now</AdminButton>
+          </div>
         </div>
-      </div>
     </AdminCard>
   )
 }

@@ -5,7 +5,6 @@
 
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { motion, AnimatePresence } from "motion/react"
 import { cn } from "@/lib/utils"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { AdminCard } from "@/components/shared/Cards"
@@ -25,12 +24,10 @@ import {
   History,
   ShieldCheck,
   MoreVertical,
-  Plus,
   Send,
   XCircle,
   CheckCircle2,
   AlertTriangle,
-  Edit2
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { toast } from "sonner"
@@ -41,13 +38,26 @@ export default function SRDetailScreen() {
   const [sr, setSr] = React.useState<ServiceRequest | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [newNote, setNewNote] = React.useState("")
+  const badgeStatus =
+    sr?.status === "pending"
+      ? "pending"
+      : sr?.status === "assigned" || sr?.status === "en-route" || sr?.status === "arrived" || sr?.status === "in-progress"
+        ? "processing"
+        : sr?.status === "completed"
+          ? "completed"
+          : "closed"
+
+  const refreshSR = React.useCallback(async () => {
+    if (!id) return
+    const data = await serviceRequestRepository.getSRById(id)
+    setSr(data)
+  }, [id])
 
   React.useEffect(() => {
     const fetchSR = async () => {
       if (!id) return;
       try {
-        const data = await serviceRequestRepository.getSRById(id);
-        setSr(data);
+        await refreshSR()
       } catch (error) {
         console.error(error);
       } finally {
@@ -55,18 +65,41 @@ export default function SRDetailScreen() {
       }
     }
     fetchSR();
-  }, [id])
+  }, [refreshSR])
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !sr) return;
     try {
       await serviceRequestRepository.addInternalNote(sr.id, newNote);
-      const updated = await serviceRequestRepository.getSRById(sr.id);
-      setSr(updated);
+      await refreshSR()
       setNewNote("");
       toast.success("Internal note added");
     } catch (error) {
       toast.error("Failed to add note");
+    }
+  }
+
+  const handleEscalate = async () => {
+    if (!sr) return
+    try {
+      await serviceRequestRepository.escalateSR(sr.id, "ServiceRequestEscalation", `Manual escalation raised for ${sr.srNumber}.`)
+      await refreshSR()
+      toast.success("Service request escalated")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to escalate service request")
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!sr) return
+    try {
+      await serviceRequestRepository.cancelSR(sr.id, `Cancelled from SR detail for ${sr.srNumber}.`)
+      await refreshSR()
+      toast.success("Service request cancelled")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to cancel service request")
     }
   }
 
@@ -87,7 +120,7 @@ export default function SRDetailScreen() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-brand-navy">{sr.srNumber}</h1>
-              <StatusBadge status={sr.status === 'pending' ? 'urgent' : 'processing'}>
+              <StatusBadge status={badgeStatus}>
                 {sr.status}
               </StatusBadge>
               {sr.isEscalated && (
@@ -104,21 +137,21 @@ export default function SRDetailScreen() {
           <AdminButton 
             variant="outline" 
             size="sm" 
-            onClick={() => toast.info("Quick Triage: Priority & Status update dialog coming soon")}
+            onClick={handleEscalate}
           >
             <AlertTriangle size={18} />
           </AdminButton>
           <AdminButton 
             variant="outline" 
             size="sm" 
-            onClick={() => navigate(`/service-requests/${sr.id}/edit`)}
+            onClick={handleCancel}
           >
-            <Edit2 size={18} />
+            <XCircle size={18} />
           </AdminButton>
           <AdminButton 
             variant="outline" 
             size="sm" 
-            onClick={() => toast.info("Advanced SR options: Clone, Delete, Export PDF")}
+            onClick={() => navigate(`/service-requests/${sr.id}/edit`)}
           >
             <MoreVertical size={18} />
           </AdminButton>
@@ -142,7 +175,7 @@ export default function SRDetailScreen() {
                 <div className="flex items-center justify-between">
                   <h3 
                     className="font-bold text-brand-navy text-lg cursor-pointer hover:text-brand-gold transition-colors"
-                    onClick={() => navigate(`/customers/${sr.customer.id}`)}
+                    onClick={() => sr.customer.id ? navigate(`/customers/${sr.customer.id}`) : toast.info("Customer 360 will be available when SRs are linked to customer records.")}
                   >
                     {sr.customer.name}
                   </h3>
@@ -278,7 +311,7 @@ export default function SRDetailScreen() {
                 {sr.scheduling.assignedTechnicianName ? (
                   <div 
                     className="flex items-center gap-3 p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10 cursor-pointer hover:border-brand-gold transition-colors"
-                    onClick={() => navigate(`/team/technicians/${sr.scheduling.assignedTechnicianId}`)}
+                    onClick={() => navigate(`/team/${sr.scheduling.assignedTechnicianId}`)}
                   >
                     <div className="size-10 bg-brand-navy text-brand-gold rounded-full flex items-center justify-center font-bold">
                       {sr.scheduling.assignedTechnicianName[0]}
@@ -295,7 +328,7 @@ export default function SRDetailScreen() {
                       variant="outline" 
                       size="sm" 
                       className="w-full"
-                      onClick={() => navigate(`/service-requests/scheduling/${sr.id}`)}
+                      onClick={() => navigate(`/operations/dispatch?srId=${sr.id}`)}
                     >
                       Assign Now
                     </AdminButton>

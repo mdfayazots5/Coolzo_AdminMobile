@@ -8,6 +8,9 @@ This file tracks the systematic verification of API integration across all scree
 3. Verify error handling for API failures.
 4. Update this file and `API_INTEGRATION_MASTER.md`.
 
+Current truth note:
+Only Batch 1, Batch 2, and Batch 18 are re-verified in the current 2026-04-19 pass. Remaining batches stay listed for tracking coverage, but they should be treated as historical until their repositories and backend contracts are re-audited.
+
 ---
 
 ## Batch 1: Authentication & Identity
@@ -18,12 +21,19 @@ This file tracks the systematic verification of API integration across all scree
 - [x] Reset Password (`src/features/auth/ResetPasswordScreen.tsx`)
 - [x] My Profile (`src/features/team/MyProfileScreen.tsx`)
 
+Progress note:
+- 2026-04-19: Completed Phase 1 auth verification and issue-fixing end to end on the real admin-mobile stack. Verified the existing `/api/v1/auth/*` contracts, fixed `POST /api/v1/auth/login-field` so technician/helper employee codes authenticate against real linked users, removed the stale `tblOtpVerification.BranchId` expectation from EF mapping, reduced generated password-reset tokens to the live 16-character OTP column size, expanded backend CORS for the phase test/dev port, changed the staff login field to accept username or email instead of browser-valid email only, and aligned role-based navigation to the required role home routes. Added deterministic Playwright coverage in `e2e/tests/auth.spec.js` for login, invalid login, field login, OTP login/verify, refresh, logout, force logout, forgot password, and reset password; the Phase 1 auth suite now passes 8/8.
+
 ## Batch 2: System & Governance
 - [x] System Health (`src/features/system/SystemHealthDashboard.tsx`)
 - [x] App Permissions (`src/features/system/PermissionsSettings.tsx`)
 - [x] Sync Queue (`src/features/system/OfflineSyncQueue.tsx`)
 - [x] Audit Logs (`src/features/governance/AuditLogs.tsx`)
 - [x] CMS Control (`src/features/governance/CMSManager.tsx`)
+
+Progress note:
+- 2026-04-19: Completed the live RBAC/navigation shell slice. Added backend role permission snapshot/update endpoints, switched the role repository off legacy `/admin/roles` placeholders, taught the client to derive a live `PermissionSet` from backend permissions, cached that permission matrix locally, refreshed it on app foreground after extended background time, filtered navigation items through `canView(module)`, and routed authenticated users to role-specific home screens.
+- 2026-04-19: Completed Phase 2 end to end against the current .NET API and actual Vite/React admin-mobile client. Added the required `modules` permission matrix to `GET /api/v1/auth/me/permissions` and `GET /api/v1/roles/{roleId}/permissions` while preserving raw `permissions[]`, fixed `PUT /api/v1/roles/{roleId}/permissions` replacement so existing role-permission rows are retained instead of duplicated, added `POST /api/v1/admin/view-as-role` with audit logging, wired client RBAC to prefer live module/action snapshots, added `X-Coolzo-View-As-Role` header support, redirected unauthorized route access to `/unauthorized`, added the Super Admin view-as-role selector and persistent orange banner, expanded the role editor matrix to all nav modules, and added `e2e/tests/rbac.spec.js`. Verified with `dotnet build Backend/Coolzo.Api/Coolzo.Api.csproj`, `npm run build`, `COOLZO_API_URL=http://172.17.32.1:5258 npm run test:rbac` (5/5), and `COOLZO_API_URL=http://172.17.32.1:5258 npm run test:auth` (8/8).
 
 ## Batch 3: Team & Technician Mgmt
 - [x] User Directory (`src/features/admin/UserManagementListScreen.tsx`)
@@ -121,8 +131,13 @@ This file tracks the systematic verification of API integration across all scree
 ## Batch 18: Support & Feedback
 - [x] Support Dashboard (`src/features/support/SupportDashboard.tsx`)
 - [x] Ticket Queue (`src/features/support/SupportTicketQueue.tsx`)
+- [x] Create Ticket (`src/features/support/SupportTicketCreateScreen.tsx`)
 - [x] Ticket Detail (`src/features/support/TicketDetailScreen.tsx`)
 - [x] Feedback Registry (`src/features/support/FeedbackList.tsx`)
+- [x] Feedback Detail (`src/features/support/FeedbackDetail.tsx`)
+
+Progress note:
+- 2026-04-19: Re-verified Batch 18 against the .NET API source. Live integration now uses the standard `ApiResponse<T>` envelope, `/api/v1/support-tickets`, `/api/v1/support-ticket-lookups`, `/api/v1/analytics/support`, and `/api/v1/customer-reviews`. Added the missing create-ticket route/screen. Admin feedback response remains intentionally blocked in live mode because the backend has no admin-response field or endpoint in the current schema.
 
 ## Batch 19: Governance & CMS
 - [x] Content Manager (`src/features/governance/CMSManager.tsx`)

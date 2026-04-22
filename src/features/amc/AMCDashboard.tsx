@@ -4,13 +4,11 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { amcRepository, AMCContract } from "@/core/network/amc-repository"
+import { amcRepository, AMCContract, AMCDashboardStats } from "@/core/network/amc-repository"
 import { useNavigate } from "react-router-dom"
 import { 
-  BarChart3, 
   TrendingUp, 
   Users, 
   RefreshCw, 
@@ -54,7 +52,7 @@ const ENROLLMENT_DATA = [
 ];
 
 export default function AMCDashboard() {
-  const [stats, setStats] = React.useState<any>(null)
+  const [stats, setStats] = React.useState<AMCDashboardStats | null>(null)
   const [recentEnrollments, setRecentEnrollments] = React.useState<AMCContract[]>([])
   const [expiringSoon, setExpiringSoon] = React.useState<AMCContract[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
@@ -108,7 +106,7 @@ export default function AMCDashboard() {
           onClick={() => navigate('/amc/renewals')}
         />
         <StatCard 
-          label="Monthly Revenue" 
+          label="Annual AMC Revenue" 
           value={`₹${(stats.revenue / 1000).toFixed(0)}k`} 
           trend="+8%" 
           up 
@@ -122,6 +120,21 @@ export default function AMCDashboard() {
           icon={<Calendar size={20} />} 
           onClick={() => navigate('/amc/visits')}
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <AdminCard className="p-6">
+          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Expiring Soon</p>
+          <p className="mt-2 text-2xl font-bold text-brand-navy">{stats.expiringSoon}</p>
+        </AdminCard>
+        <AdminCard className="p-6">
+          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Cancelled Contracts</p>
+          <p className="mt-2 text-2xl font-bold text-brand-navy">{stats.cancelledContracts}</p>
+        </AdminCard>
+        <AdminCard className="p-6">
+          <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">New Enrollments</p>
+          <p className="mt-2 text-2xl font-bold text-brand-navy">{stats.newEnrollments}</p>
+        </AdminCard>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

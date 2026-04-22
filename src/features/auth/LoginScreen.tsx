@@ -11,12 +11,15 @@ import { AdminTextField } from "@/components/shared/AdminTextField"
 import { AdminCard } from "@/components/shared/Cards"
 import { useAuthStore, AuthStatus, UserRole } from "@/store/auth-store"
 import { authRepository } from "@/core/network/auth-repository"
+import { isDemoMode } from "@/core/config/api-config"
+import { resolveDefaultRoute } from "@/core/auth/auth-session"
 import { toast } from "sonner"
 import { Mail, Lock, User, KeyRound, ArrowRight, ShieldCheck } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 export default function LoginScreen() {
-  const [loginMode, setLoginMode] = React.useState<"staff" | "field" | "test">("staff")
+  const demoMode = isDemoMode()
+  const [loginMode, setLoginMode] = React.useState<"staff" | "field" | "test">(demoMode ? "staff" : "staff")
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [employeeId, setEmployeeId] = React.useState("")
@@ -24,7 +27,7 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [rememberMe, setRememberMe] = React.useState(false)
 
-  const { login, setRequires2FA, setAuthenticating } = useAuthStore()
+  const { login, setRequires2FA, setAuthenticating, setUnauthenticated } = useAuthStore()
   const navigate = useNavigate()
 
   React.useEffect(() => {
@@ -35,16 +38,23 @@ export default function LoginScreen() {
     }
   }, [])
 
+  React.useEffect(() => {
+    if (!demoMode && loginMode === "test") {
+      setLoginMode("staff")
+    }
+  }, [demoMode, loginMode])
+
   const handleQuickLogin = (role: UserRole) => {
     const mockUser = {
       id: `test-${role.toLowerCase()}`,
       name: `Test ${role.replace('_', ' ')}`,
       email: `${role.toLowerCase()}@coolzo.com`,
-      role: role
+      role: role,
+      permissions: []
     };
     login(mockUser, "mock-token", "mock-refresh-token");
     toast.success(`Logged in as ${role}`);
-    navigate("/dashboard");
+    navigate(resolveDefaultRoute(role));
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -61,7 +71,7 @@ export default function LoginScreen() {
       }
 
       if (response.requires2FA) {
-        setRequires2FA(response.user, response.token)
+        setRequires2FA(response.user, response.token || "__pending_2fa__")
         navigate("/verify-otp")
       } else {
         if (rememberMe) {
@@ -71,9 +81,10 @@ export default function LoginScreen() {
         }
         login(response.user, response.token, response.refreshToken)
         toast.success(`Welcome back, ${response.user.name}!`)
-        navigate("/dashboard")
+        navigate(resolveDefaultRoute(response.user.role))
       }
     } catch (error: any) {
+      setUnauthenticated()
       toast.error(error.message || "Login failed")
     } finally {
       setIsLoading(false)
@@ -123,15 +134,17 @@ export default function LoginScreen() {
             >
               Field
             </button>
-            <button
-              onClick={() => setLoginMode("test")}
-              className={cn(
-                "flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
-                loginMode === "test" ? "bg-white text-brand-navy shadow-sm" : "text-brand-muted hover:text-brand-navy"
-              )}
-            >
-              Quick Test
-            </button>
+            {demoMode && (
+              <button
+                onClick={() => setLoginMode("test")}
+                className={cn(
+                  "flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all",
+                  loginMode === "test" ? "bg-white text-brand-navy shadow-sm" : "text-brand-muted hover:text-brand-navy"
+                )}
+              >
+                Quick Test
+              </button>
+            )}
           </div>
 
           <AnimatePresence mode="wait">
@@ -172,8 +185,8 @@ export default function LoginScreen() {
                     >
                       <AdminTextField
                         label="Email Address"
-                        placeholder="name@coolzo.com"
-                        type="email"
+                        placeholder="name@coolzo.com or username"
+                        type="text"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         prefixIcon={<Mail size={18} />}
@@ -205,12 +218,12 @@ export default function LoginScreen() {
                       />
                       <AdminTextField
                         label="Access PIN"
-                        placeholder="••••"
+                        placeholder="Enter your field access credential"
                         type="password"
                         value={pin}
                         onChange={(e) => setPin(e.target.value)}
                         prefixIcon={<KeyRound size={18} />}
-                        maxLength={4}
+                        isPassword
                       />
                     </motion.div>
                   )}

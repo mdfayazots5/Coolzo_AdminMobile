@@ -6,20 +6,17 @@
 import * as React from "react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
+import { InlineLoader } from "@/components/shared/Layout"
 import { estimateRepository, WorkOrder } from "@/core/network/estimate-repository"
 import { 
   ClipboardList, 
   Search, 
-  Filter, 
   Clock, 
   CheckCircle2, 
   AlertCircle,
   ChevronRight,
-  User,
   Package
 } from "lucide-react"
-import { AdminButton } from "@/components/shared/AdminButton"
 import { cn } from "@/lib/utils"
 import { useNavigate } from "react-router-dom"
 
@@ -28,6 +25,7 @@ export default function WorkOrderList() {
   const [workOrders, setWorkOrders] = React.useState<WorkOrder[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [filter, setFilter] = React.useState<'all' | 'open' | 'in-progress' | 'completed'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchWorkOrders = async () => {
@@ -43,7 +41,12 @@ export default function WorkOrderList() {
     fetchWorkOrders();
   }, [])
 
-  const filteredWOs = workOrders.filter(wo => filter === 'all' || wo.status === filter);
+  const filteredWOs = workOrders.filter((wo) => {
+    const matchesFilter = filter === 'all' || wo.status === filter;
+    const matchesSearch = [wo.woNumber, wo.estimateNumber, wo.customerName]
+      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -63,6 +66,8 @@ export default function WorkOrderList() {
             type="text" 
             placeholder="Search by WO #, Estimate # or Customer..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">

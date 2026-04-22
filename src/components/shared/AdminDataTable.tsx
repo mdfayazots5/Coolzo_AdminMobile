@@ -30,6 +30,10 @@ interface AdminDataTableProps<T> {
   onRowClick?: (item: T) => void
   searchPlaceholder?: string
   onSearch?: (query: string) => void
+  pageNumber?: number
+  onPageChange?: (pageNumber: number) => void
+  hasNextPage?: boolean
+  resultLabel?: string
 }
 
 export function AdminDataTable<T>({ 
@@ -38,7 +42,11 @@ export function AdminDataTable<T>({
   isLoading, 
   onRowClick,
   searchPlaceholder = "Search...",
-  onSearch
+  onSearch,
+  pageNumber = 1,
+  onPageChange,
+  hasNextPage = false,
+  resultLabel,
 }: AdminDataTableProps<T>) {
   return (
     <div className="space-y-4">
@@ -112,13 +120,25 @@ export function AdminDataTable<T>({
 
       <div className="flex items-center justify-between px-2">
         <p className="text-xs text-brand-muted">
-          Showing <span className="font-medium text-brand-navy">{data.length}</span> results
+          {resultLabel || (
+            <>
+              Showing <span className="font-medium text-brand-navy">{data.length}</span> results
+            </>
+          )}
         </p>
         <div className="flex items-center gap-2">
-          <button className="p-1 rounded-md border border-border hover:bg-brand-navy/5 disabled:opacity-50" disabled>
+          <button
+            className="p-1 rounded-md border border-border hover:bg-brand-navy/5 disabled:opacity-50"
+            disabled={pageNumber <= 1}
+            onClick={() => onPageChange?.(pageNumber - 1)}
+          >
             <ChevronLeft size={16} />
           </button>
-          <button className="p-1 rounded-md border border-border hover:bg-brand-navy/5 disabled:opacity-50" disabled>
+          <button
+            className="p-1 rounded-md border border-border hover:bg-brand-navy/5 disabled:opacity-50"
+            disabled={!hasNextPage}
+            onClick={() => onPageChange?.(pageNumber + 1)}
+          >
             <ChevronRight size={16} />
           </button>
         </div>

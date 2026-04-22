@@ -9,12 +9,12 @@ import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { amcRepository } from "@/core/network/amc-repository"
 import { equipmentRepository, Equipment } from "@/core/network/equipment-repository"
+import { customerRepository, Customer } from "@/core/network/customer-repository"
 import { 
   User, 
   Search, 
   CheckCircle2, 
   Wrench, 
-  Calendar, 
   CreditCard,
   ChevronRight,
   ChevronLeft,
@@ -37,14 +37,31 @@ export default function AMCEnrollmentForm() {
   const navigate = useNavigate();
   const [step, setStep] = React.useState(1)
   const [customerSearch, setCustomerSearch] = React.useState("")
-  const [selectedCustomer, setSelectedCustomer] = React.useState<any>(null)
+  const [selectedCustomer, setSelectedCustomer] = React.useState<Customer | null>(null)
   const [selectedPlan, setSelectedPlan] = React.useState<any>(null)
   const [customerEquipment, setCustomerEquipment] = React.useState<Equipment[]>([])
   const [selectedEquipmentIds, setSelectedEquipmentIds] = React.useState<string[]>([])
   const [startDate, setStartDate] = React.useState(new Date().toISOString().split('T')[0])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [customers, setCustomers] = React.useState<Customer[]>([])
+  const [isCustomersLoading, setIsCustomersLoading] = React.useState(true)
 
-  const handleCustomerSelect = async (customer: any) => {
+  React.useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const data = await customerRepository.getCustomers({ pageNumber: 1, pageSize: 20 });
+        setCustomers(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsCustomersLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  const handleCustomerSelect = async (customer: Customer) => {
     setSelectedCustomer(customer);
     const eq = await equipmentRepository.getEquipmentByCustomerId(customer.id);
     setCustomerEquipment(eq);
@@ -58,11 +75,16 @@ export default function AMCEnrollmentForm() {
   }
 
   const handleSubmit = async () => {
+    if (!selectedCustomer || !selectedPlan) {
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await amcRepository.createContract({
+      await amcRepository.enrollContract({
         customerId: selectedCustomer.id,
         customerName: selectedCustomer.name,
+        customerPhone: selectedCustomer.phone,
         planType: selectedPlan.id,
         startDate,
         endDate: new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1)).toISOString().split('T')[0],
@@ -122,11 +144,18 @@ export default function AMCEnrollmentForm() {
               </div>
 
               <div className="space-y-4">
-                {/* Mock Search Results */}
-                {['Rajesh Kumar', 'Anjali Sharma', 'Hotel Marine Plaza'].filter(n => n.toLowerCase().includes(customerSearch.toLowerCase())).map((name, i) => (
+                {isCustomersLoading ? (
+                  <InlineLoader className="h-40" />
+                ) : customers
+                  .filter((customer) =>
+                    [customer.name, customer.phone, customer.email]
+                      .filter(Boolean)
+                      .some((value) => value.toLowerCase().includes(customerSearch.toLowerCase()))
+                  )
+                  .map((customer) => (
                   <div 
-                    key={i} 
-                    onClick={() => handleCustomerSelect({ id: `c${i+1}`, name })}
+                    key={customer.id} 
+                    onClick={() => handleCustomerSelect(customer)}
                     className="p-4 bg-white border border-border rounded-2xl flex items-center justify-between hover:border-brand-gold cursor-pointer transition-all group"
                   >
                     <div className="flex items-center gap-4">
@@ -134,8 +163,8 @@ export default function AMCEnrollmentForm() {
                         <User size={20} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-brand-navy">{name}</p>
-                        <p className="text-[10px] text-brand-muted uppercase tracking-widest">+91 98200 1234{i}</p>
+                        <p className="text-sm font-bold text-brand-navy">{customer.name}</p>
+                        <p className="text-[10px] text-brand-muted uppercase tracking-widest">{customer.phone}</p>
                       </div>
                     </div>
                     <ChevronRight size={20} className="text-brand-muted group-hover:text-brand-gold" />
@@ -248,11 +277,11 @@ export default function AMCEnrollmentForm() {
                   <div className="grid grid-cols-2 gap-8 mb-8">
                     <div>
                       <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-1">Customer</p>
-                      <p className="text-sm font-bold text-brand-navy">{selectedCustomer.name}</p>
+                      <p className="text-sm font-bold text-brand-navy">{selectedCustomer?.name}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-1">Plan Selected</p>
-                      <p className="text-sm font-bold text-brand-navy">{selectedPlan.name} Plan</p>
+                      <p className="text-sm font-bold text-brand-navy">{selectedPlan?.name} Plan</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-1">Start Date</p>

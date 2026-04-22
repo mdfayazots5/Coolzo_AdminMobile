@@ -41,7 +41,7 @@ export interface NavItem {
 
 export const NavigationConfig: Record<UserRole, NavItem[]> = {
   [UserRole.SUPER_ADMIN]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', module: 'dashboard' },
     { id: 'live', label: 'Dashboard', icon: <Zap size={20} />, path: '/operations/dashboard', module: 'operations' },
     { id: 'dispatch', label: 'Dispatch', icon: <RefreshCw size={20} />, path: '/operations/dispatch', module: 'operations' },
     { id: 'sla', label: 'SLA Alerts', icon: <ShieldCheck size={20} />, path: '/operations/sla-alerts', module: 'operations' },
@@ -57,7 +57,7 @@ export const NavigationConfig: Record<UserRole, NavItem[]> = {
     { id: 'billing', label: 'Billing', icon: <CreditCard size={20} />, path: '/billing/dashboard', module: 'billing' },
     { id: 'finance', label: 'Finance', icon: <BarChart3 size={20} />, path: '/finance/dashboard', module: 'finance' },
     { id: 'support', label: 'Support', icon: <MessageSquare size={20} />, path: '/support/dashboard', module: 'support' },
-    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'settings' },
+    { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'reports' },
     { id: 'cms', label: 'CMS', icon: <Globe size={20} />, path: '/governance/cms', module: 'settings' },
     { id: 'audit', label: 'Audit', icon: <ShieldCheck size={20} />, path: '/governance/audit', module: 'settings' },
     { id: 'health', label: 'Health', icon: <Activity size={20} />, path: '/system/health', module: 'settings' },
@@ -65,7 +65,7 @@ export const NavigationConfig: Record<UserRole, NavItem[]> = {
     { id: 'team', label: 'Team', icon: <Users size={20} />, path: '/team', module: 'team' },
   ],
   [UserRole.ADMIN]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', module: 'dashboard' },
     { id: 'live', label: 'Ops Dash', icon: <Zap size={20} />, path: '/operations/dashboard', module: 'operations' },
     { id: 'dispatch', label: 'Dispatch', icon: <RefreshCw size={20} />, path: '/operations/dispatch', module: 'operations' },
     { id: 'map', label: 'Live Map', icon: <MapPin size={20} />, path: '/operations/map', module: 'operations' },
@@ -85,19 +85,15 @@ export const NavigationConfig: Record<UserRole, NavItem[]> = {
     { id: 'more', label: 'More', icon: <Settings size={20} />, path: '/settings', module: 'settings' },
   ],
   [UserRole.TECHNICIAN]: [
-    { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} />, path: '/field/dashboard', module: 'jobs' },
+    { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} />, path: '/technician/home', module: 'jobs' },
     { id: 'jobs', label: 'My Jobs', icon: <ClipboardList size={20} />, path: '/field/jobs', module: 'jobs' },
-    { id: 'attendance', label: 'Attendance', icon: <CalendarCheck size={20} />, path: '/attendance', module: 'attendance' },
-    { id: 'profile', label: 'Profile', icon: <UserCircle size={20} />, path: '/profile', module: 'profile' },
   ],
   [UserRole.HELPER]: [
-    { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} />, path: '/field/dashboard', module: 'jobs' },
+    { id: 'dash', label: 'Home', icon: <LayoutDashboard size={20} />, path: '/technician/home', module: 'jobs' },
     { id: 'jobs', label: 'My Jobs', icon: <ClipboardList size={20} />, path: '/field/jobs', module: 'jobs' },
-    { id: 'attendance', label: 'Attendance', icon: <CalendarCheck size={20} />, path: '/attendance', module: 'attendance' },
-    { id: 'profile', label: 'Profile', icon: <UserCircle size={20} />, path: '/profile', module: 'profile' },
   ],
   [UserRole.OPS_MANAGER]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', module: 'dashboard' },
     { id: 'live', label: 'Ops Dash', icon: <Zap size={20} />, path: '/operations/dashboard', module: 'operations' },
     { id: 'dispatch', label: 'Dispatch', icon: <RefreshCw size={20} />, path: '/operations/dispatch', module: 'operations' },
     { id: 'sla', label: 'SLA Alerts', icon: <ShieldCheck size={20} />, path: '/operations/sla-alerts', module: 'operations' },
@@ -110,7 +106,7 @@ export const NavigationConfig: Record<UserRole, NavItem[]> = {
     { id: 'more', label: 'More', icon: <Settings size={20} />, path: '/settings', module: 'settings' },
   ],
   [UserRole.OPS_EXECUTIVE]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', module: 'dashboard' },
     { id: 'live', label: 'Live Ops', icon: <Zap size={20} />, path: '/operations/dashboard', module: 'operations' },
     { id: 'schedule', label: 'Schedule', icon: <CalendarCheck size={20} />, path: '/scheduling', module: 'scheduling' },
     { id: 'amc', label: 'AMC', icon: <ShieldCheck size={20} />, path: '/amc/dashboard', module: 'amc' },
@@ -120,33 +116,31 @@ export const NavigationConfig: Record<UserRole, NavItem[]> = {
     { id: 'more', label: 'More', icon: <Settings size={20} />, path: '/settings', module: 'settings' },
   ],
   [UserRole.FINANCE_MANAGER]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
     { id: 'inv', label: 'Invoices', icon: <FileText size={20} />, path: '/billing/dashboard', module: 'billing' },
     { id: 'pay', label: 'Payments', icon: <CreditCard size={20} />, path: '/finance/dashboard', module: 'finance' },
-    { id: 'rep', label: 'Reports', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'settings' },
+    { id: 'rep', label: 'Reports', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'reports' },
   ],
   [UserRole.BILLING_EXECUTIVE]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
     { id: 'inv', label: 'Invoices', icon: <FileText size={20} />, path: '/billing/dashboard', module: 'billing' },
     { id: 'pay', label: 'Payments', icon: <CreditCard size={20} />, path: '/finance/dashboard', module: 'finance' },
-    { id: 'rep', label: 'Reports', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'settings' },
+    { id: 'rep', label: 'Reports', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'reports' },
   ],
   [UserRole.INVENTORY_MANAGER]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', module: 'dashboard' },
     { id: 'parts', label: 'Catalog', icon: <Package size={20} />, path: '/inventory', module: 'inventory' },
     { id: 'req', label: 'Requests', icon: <ClipboardList size={20} />, path: '/inventory/requests', module: 'inventory' },
     { id: 'po', label: 'Orders', icon: <FileText size={20} />, path: '/inventory/orders', module: 'inventory' },
   ],
   [UserRole.SUPPORT]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', module: 'dashboard' },
     { id: 'sr', label: 'Requests', icon: <Wrench size={20} />, path: '/service-requests', module: 'service-requests' },
     { id: 'cust', label: 'Customers', icon: <UserCircle size={20} />, path: '/customers', module: 'customers' },
     { id: 'tix', label: 'Tickets', icon: <Ticket size={20} />, path: '/support/tickets', module: 'support' },
   ],
   [UserRole.MARKETING_MANAGER]: [
-    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', module: 'dashboard' },
-    { id: 'cms', label: 'CMS', icon: <Globe size={20} />, path: '/governance/cms', module: 'settings' },
+    { id: 'dash', label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/marketing/dashboard', module: 'dashboard' },
+    { id: 'cms', label: 'CMS', icon: <Globe size={20} />, path: '/marketing/dashboard', module: 'settings' },
     { id: 'promo', label: 'Promos', icon: <Megaphone size={20} />, path: '/governance/coupons', module: 'settings' },
-    { id: 'stats', label: 'Analytics', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'settings' },
+    { id: 'stats', label: 'Analytics', icon: <BarChart3 size={20} />, path: '/governance/reports', module: 'reports' },
   ],
 };

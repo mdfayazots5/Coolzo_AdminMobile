@@ -9,6 +9,7 @@ import { AdminButton } from "@/components/shared/AdminButton"
 import { AdminCard } from "@/components/shared/Cards"
 import { useAuthStore } from "@/store/auth-store"
 import { authRepository } from "@/core/network/auth-repository"
+import { resolveDefaultRoute } from "@/core/auth/auth-session"
 import { toast } from "sonner"
 import { ShieldCheck, ArrowLeft, RefreshCw } from "lucide-react"
 import { useNavigate } from "react-router-dom"
@@ -19,14 +20,14 @@ export default function OTPVerificationScreen() {
   const [countdown, setCountdown] = React.useState(30)
   const inputs = React.useRef<(HTMLInputElement | null)[]>([])
 
-  const { user, token, login } = useAuthStore()
+  const { user, login, setUnauthenticated } = useAuthStore()
   const navigate = useNavigate()
 
   React.useEffect(() => {
-    if (!user || !token) {
+    if (!user) {
       navigate("/login")
     }
-  }, [user, token, navigate])
+  }, [user, navigate])
 
   React.useEffect(() => {
     if (countdown > 0) {
@@ -64,7 +65,7 @@ export default function OTPVerificationScreen() {
       const response = await authRepository.verifyOTP(user?.email || '', code)
       login(response.user, response.token, response.refreshToken)
       toast.success("Identity verified successfully")
-      navigate("/dashboard")
+      navigate(resolveDefaultRoute(response.user.role))
     } catch (error: any) {
       toast.error("Invalid verification code")
       setOtp(["", "", "", "", "", ""])
@@ -84,7 +85,10 @@ export default function OTPVerificationScreen() {
         className="w-full max-w-md z-10"
       >
         <button 
-          onClick={() => navigate("/login")}
+          onClick={() => {
+            setUnauthenticated()
+            navigate("/login")
+          }}
           className="flex items-center gap-2 text-brand-muted hover:text-brand-gold transition-colors mb-8 group"
         >
           <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />

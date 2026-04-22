@@ -11,9 +11,6 @@ import { equipmentRepository, WarrantyRecord } from "@/core/network/equipment-re
 import { 
   ShieldCheck, 
   Search, 
-  Filter, 
-  Calendar, 
-  Wrench, 
   User, 
   ChevronRight,
   AlertTriangle,
@@ -26,6 +23,8 @@ export default function WarrantyManagement() {
   const navigate = useNavigate();
   const [warranties, setWarranties] = React.useState<WarrantyRecord[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState<'active' | 'expiring' | 'expired'>('active')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchWarranties = async () => {
@@ -42,6 +41,20 @@ export default function WarrantyManagement() {
   }, [])
 
   if (isLoading) return <InlineLoader className="h-screen" />;
+
+  const normalized = warranties.map((warranty) => {
+    const daysLeft = Math.ceil((new Date(warranty.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const status = daysLeft < 0 ? 'expired' : daysLeft <= 30 ? 'expiring' : 'active';
+    return { ...warranty, status, daysLeft };
+  });
+
+  const filteredWarranties = normalized.filter((warranty) => {
+    const matchesFilter = warranty.status === filter;
+    const matchesSearch = [warranty.equipmentDisplayId, warranty.partName, warranty.customerName]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
@@ -81,11 +94,14 @@ export default function WarrantyManagement() {
             type="text" 
             placeholder="Search by Equipment ID or Part..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2">
-          <button className="px-4 py-2 bg-brand-navy text-brand-gold rounded-xl text-xs font-bold uppercase tracking-widest">Active</button>
-          <button className="px-4 py-2 bg-white text-brand-muted border border-border rounded-xl text-xs font-bold uppercase tracking-widest">Expiring</button>
+          <button onClick={() => setFilter('active')} className={cn("px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest", filter === 'active' ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted border border-border")}>Active</button>
+          <button onClick={() => setFilter('expiring')} className={cn("px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest", filter === 'expiring' ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted border border-border")}>Expiring</button>
+          <button onClick={() => setFilter('expired')} className={cn("px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest", filter === 'expired' ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted border border-border")}>Expired</button>
         </div>
       </div>
 
@@ -103,7 +119,7 @@ export default function WarrantyManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {warranties.map(w => (
+              {filteredWarranties.map(w => (
                 <tr key={w.id} className="hover:bg-brand-navy/[0.01] transition-colors group">
                   <td className="p-6">
                     <button onClick={() => navigate(`/equipment/${w.equipmentId}`)} className="text-sm font-bold text-brand-navy hover:text-brand-gold transition-colors">
@@ -117,7 +133,12 @@ export default function WarrantyManagement() {
                   <td className="p-6">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-brand-navy">{w.expiryDate}</span>
-                      <span className="text-[10px] text-status-completed font-bold uppercase tracking-widest">60 Days Left</span>
+                      <span className={cn(
+                        "text-[10px] font-bold uppercase tracking-widest",
+                        w.status === 'expired' ? "text-status-emergency" : w.status === 'expiring' ? "text-status-pending" : "text-status-completed"
+                      )}>
+                        {w.daysLeft < 0 ? `${Math.abs(w.daysLeft)} Days Overdue` : `${w.daysLeft} Days Left`}
+                      </span>
                     </div>
                   </td>
                   <td className="p-6">

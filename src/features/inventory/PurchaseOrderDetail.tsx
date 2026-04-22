@@ -4,7 +4,6 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { inventoryRepository, PurchaseOrder } from "@/core/network/inventory-repository"
@@ -13,14 +12,10 @@ import {
   ChevronLeft, 
   Clock, 
   CheckCircle2, 
-  User, 
   Package,
   FileText,
-  ArrowRight,
   Download,
-  Share2,
   AlertCircle,
-  Calendar,
   DollarSign,
   XCircle
 } from "lucide-react"
@@ -61,7 +56,7 @@ export default function PurchaseOrderDetail() {
   const handleReceive = async () => {
     if (!po) return;
     try {
-      // Logic to update stock and PO status
+      await inventoryRepository.receivePurchaseOrder(po.id, receivedQtys);
       toast.success("Stock received and updated successfully");
       navigate('/inventory/orders');
     } catch (error) {

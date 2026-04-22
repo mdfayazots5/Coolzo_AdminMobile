@@ -4,174 +4,142 @@
  */
 
 import * as React from "react"
+import { useNavigate } from "react-router-dom"
+import { AlertCircle, ChevronRight, Search, Star } from "lucide-react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { supportRepository, Feedback } from "@/core/network/support-repository"
-import { 
-  Star, 
-  Search, 
-  Filter, 
-  ChevronRight, 
-  User, 
-  Wrench, 
-  MessageSquare, 
-  AlertCircle,
-  CheckCircle2,
-  Eye,
-  EyeOff
-} from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
+import { InlineLoader } from "@/components/shared/Layout"
+import { Feedback, supportRepository } from "@/core/network/support-repository"
 import { cn } from "@/lib/utils"
-import { useNavigate } from "react-router-dom"
 
 export default function FeedbackList() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
   const [feedbacks, setFeedbacks] = React.useState<Feedback[]>([])
+  const [negativeFeedback, setNegativeFeedback] = React.useState<Feedback[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<number | 'all'>('all')
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [lowestFirst, setLowestFirst] = React.useState(true)
 
   React.useEffect(() => {
-    const fetchFeedback = async () => {
+    const loadFeedback = async () => {
       try {
-        const data = await supportRepository.getFeedback({});
-        setFeedbacks(data);
-      } catch (error) {
-        console.error(error);
+        const [allFeedback, negativeQueue] = await Promise.all([
+          supportRepository.getFeedback({}),
+          supportRepository.getNegativeFeedbackQueue(),
+        ])
+        setFeedbacks(allFeedback)
+        setNegativeFeedback(negativeQueue)
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
     }
-    fetchFeedback();
+
+    void loadFeedback()
   }, [])
 
-  const filteredFeedback = feedbacks.filter(f => {
-    const matchesFilter = filter === 'all' || f.rating === filter;
-    const matchesSearch = f.customerName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          f.technicianName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          f.srNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  }).sort((a, b) => a.rating - b.rating); // Lowest rating first
+  const filtered = [...feedbacks]
+    .filter((feedback) => {
+      const query = searchQuery.trim().toLowerCase()
+      if (!query) {
+        return true
+      }
+      return (
+        feedback.customerName.toLowerCase().includes(query) ||
+        feedback.technicianName.toLowerCase().includes(query) ||
+        feedback.srNumber.toLowerCase().includes(query)
+      )
+    })
+    .sort((left, right) => (lowestFirst ? left.rating - right.rating : right.rating - left.rating))
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
+  if (isLoading) {
+    return <InlineLoader className="h-screen" />
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">Customer Feedback</h1>
-          <p className="text-sm text-brand-muted">Monitor post-service reviews and ratings</p>
+          <p className="text-sm text-brand-muted">Review response, negative queue follow-up, and publish/flag control</p>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<AlertCircle size={18} />}>Negative Feedback Queue</AdminButton>
+          <AdminButton variant="outline" icon={<AlertCircle size={18} />}>
+            Negative Queue: {negativeFeedback.length}
+          </AdminButton>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
-          <input 
-            type="text" 
-            placeholder="Search by Customer, Technician or SR #..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-          <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="All" />
-          {[5, 4, 3, 2, 1].map(r => (
-            <FilterButton 
-              key={r} 
-              active={filter === r} 
-              onClick={() => setFilter(r)} 
-              label={`${r} Stars`} 
-            />
-          ))}
-        </div>
-      </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+        <AdminCard className="p-6 xl:col-span-1 border-status-emergency/20 bg-status-emergency/5">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-status-emergency">1-2 Star Follow-up</h2>
+          <div className="mt-4 space-y-3">
+            {negativeFeedback.map((feedback) => (
+              <button key={feedback.id} onClick={() => navigate(`/support/feedback/${feedback.id}`)} className="w-full rounded-2xl bg-white p-4 text-left">
+                <p className="text-sm font-bold text-brand-navy">{feedback.customerName}</p>
+                <p className="text-[10px] uppercase tracking-widest text-brand-muted">{feedback.srNumber} • {feedback.rating} stars</p>
+              </button>
+            ))}
+          </div>
+        </AdminCard>
 
-      <div className="grid grid-cols-1 gap-4">
-        {filteredFeedback.map((feedback, idx) => (
-          <motion.div
-            key={feedback.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.05 }}
-          >
-            <FeedbackCard feedback={feedback} onClick={() => navigate(`/support/feedback/${feedback.id}`)} />
-          </motion.div>
-        ))}
+        <div className="space-y-4 xl:col-span-3">
+          <div className="flex flex-col gap-4 lg:flex-row">
+            <div className="relative flex-1">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by customer, technician, or SR..."
+                className="w-full rounded-2xl border border-border bg-white py-3 pl-12 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+              />
+            </div>
+            <button
+              onClick={() => setLowestFirst((current) => !current)}
+              className="rounded-2xl border border-border bg-white px-4 py-3 text-xs font-bold uppercase tracking-widest text-brand-navy"
+            >
+              {lowestFirst ? "Lowest Rating First" : "Highest Rating First"}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {filtered.map((feedback, index) => (
+              <motion.div key={feedback.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}>
+                <FeedbackCard feedback={feedback} onClick={() => navigate(`/support/feedback/${feedback.id}`)} />
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
-function FilterButton({ active, onClick, label }: any) {
+function FeedbackCard({ feedback, onClick }: { feedback: Feedback; onClick: () => void }) {
   return (
-    <button 
-      onClick={onClick}
-      className={cn(
-        "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-        active ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted border border-border hover:border-brand-gold"
-      )}
-    >
-      {label}
-    </button>
-  )
-}
-
-function FeedbackCard({ feedback, onClick }: { feedback: Feedback, onClick: () => void }) {
-  return (
-    <AdminCard 
-      onClick={onClick}
-      className={cn(
-        "p-6 hover:shadow-xl transition-all cursor-pointer group border-l-4",
-        feedback.isNegative ? "border-l-status-emergency" : "border-l-transparent"
-      )}
-    >
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="flex items-start gap-4 flex-1">
-          <div className={cn(
-            "size-12 rounded-2xl flex items-center justify-center shrink-0",
-            feedback.isNegative ? "bg-status-emergency/10 text-status-emergency" : "bg-status-completed/10 text-status-completed"
-          )}>
-            <Star size={24} fill={feedback.rating >= 4 ? "currentColor" : "none"} />
+    <AdminCard onClick={onClick} className={cn("cursor-pointer p-6 transition-all hover:shadow-xl", feedback.isNegative && "border-l-4 border-l-status-emergency")}>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className={cn("flex size-12 items-center justify-center rounded-2xl", feedback.isNegative ? "bg-status-emergency/10 text-status-emergency" : "bg-status-completed/10 text-status-completed")}>
+            <Star size={22} className={feedback.rating >= 4 ? "fill-current" : ""} />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-1">
+          <div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map(s => (
-                  <Star key={s} size={12} className={cn(s <= feedback.rating ? "text-brand-gold fill-brand-gold" : "text-border")} />
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star key={star} size={12} className={cn(star <= feedback.rating ? "fill-brand-gold text-brand-gold" : "text-border")} />
                 ))}
               </div>
-              <h3 className="font-bold text-brand-navy">{feedback.srNumber}</h3>
-              <span className={cn(
-                "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex items-center gap-1",
-                feedback.status === 'published' ? "bg-status-completed/10 text-status-completed" : "bg-brand-muted/10 text-brand-muted"
-              )}>
-                {feedback.status === 'published' ? <Eye size={10} /> : <EyeOff size={10} />} {feedback.status}
-              </span>
+              <span className="text-sm font-bold text-brand-navy">{feedback.srNumber}</span>
             </div>
-            <p className="text-sm text-brand-navy mb-2 line-clamp-1 italic">"{feedback.reviewText}"</p>
-            <div className="flex items-center gap-4 text-xs text-brand-muted">
-              <span className="flex items-center gap-1 font-bold text-brand-navy"><User size={12} /> {feedback.customerName}</span>
-              <span className="size-1 bg-border rounded-full" />
-              <span className="flex items-center gap-1"><Wrench size={12} /> {feedback.technicianName}</span>
-            </div>
+            <p className="text-sm italic text-brand-navy">"{feedback.reviewText}"</p>
+            <p className="mt-2 text-xs text-brand-muted">{feedback.customerName} • {feedback.technicianName}</p>
           </div>
         </div>
-
-        <div className="flex items-center justify-between lg:justify-end gap-8">
-          <div className="text-right">
-            <p className="text-[10px] text-brand-muted font-bold uppercase tracking-widest mb-1">Date Received</p>
-            <p className="text-xs font-bold text-brand-navy">{new Date(feedback.date).toLocaleDateString()}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {feedback.adminResponse && <MessageSquare size={16} className="text-brand-gold" />}
-            <ChevronRight size={20} className="text-brand-gold group-hover:translate-x-1 transition-transform" />
-          </div>
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-brand-muted">{feedback.status}</span>
+          <ChevronRight size={20} className="text-brand-gold" />
         </div>
       </div>
     </AdminCard>

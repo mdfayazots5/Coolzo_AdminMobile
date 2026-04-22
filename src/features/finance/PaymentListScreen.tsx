@@ -4,86 +4,150 @@
  */
 
 import * as React from "react"
+import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
+import {
+  AlertCircle,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  Download,
+  Search,
+  ShieldCheck,
+} from "lucide-react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { paymentRepository, Payment, PaymentStatus, PaymentMethod } from "@/core/network/payment-repository"
-import { 
-  Search, 
-  Filter, 
-  Download, 
-  ChevronRight, 
-  CreditCard, 
-  Calendar, 
-  User, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle,
-  FileText
-} from "lucide-react"
+import { InlineLoader, SectionHeader } from "@/components/shared/Layout"
 import { AdminButton } from "@/components/shared/AdminButton"
+import { Payment, PaymentMethod, PaymentStatus, paymentRepository } from "@/core/network/payment-repository"
 import { cn } from "@/lib/utils"
-import { useNavigate } from "react-router-dom"
 
 export default function PaymentListScreen() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
   const [payments, setPayments] = React.useState<Payment[]>([])
+  const [unmatched, setUnmatched] = React.useState<Payment[]>([])
+  const [codPending, setCodPending] = React.useState<Payment[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<PaymentStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] = React.useState<PaymentStatus | "all">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
 
   React.useEffect(() => {
-    const fetchPayments = async () => {
+    const loadPayments = async () => {
       try {
-        const data = await paymentRepository.getPayments({});
-        setPayments(data);
+        const [paymentList, unmatchedList, codList] = await Promise.all([
+          paymentRepository.getPayments({ status: statusFilter }),
+          paymentRepository.getUnmatchedPayments(),
+          paymentRepository.getCodPending(),
+        ])
+        setPayments(paymentList)
+        setUnmatched(unmatchedList)
+        setCodPending(codList)
       } catch (error) {
-        console.error(error);
+        console.error(error)
+        toast.error("Unable to load payments")
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
     }
-    fetchPayments();
-  }, [])
 
-  const filteredPayments = payments.filter(p => {
-    const matchesFilter = filter === 'all' || p.status === filter;
-    const matchesSearch = p.paymentId.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          p.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+    void loadPayments()
+  }, [statusFilter])
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
+  const filteredPayments = payments.filter((payment) => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) {
+      return true
+    }
+
+    return (
+      payment.paymentId.toLowerCase().includes(query) ||
+      payment.customerName.toLowerCase().includes(query) ||
+      payment.invoiceNumber.toLowerCase().includes(query) ||
+      (payment.gatewayTransactionId ?? "").toLowerCase().includes(query)
+    )
+  })
+
+  if (isLoading) {
+    return <InlineLoader className="h-screen" />
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">Payment Transactions</h1>
-          <p className="text-sm text-brand-muted">Track and reconcile all incoming revenue</p>
+          <p className="text-sm text-brand-muted">Collection tracking, gateway reconciliation, and COD verification</p>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<Download size={18} />}>Export Payments</AdminButton>
+          <AdminButton variant="outline" icon={<Download size={18} />} onClick={() => navigate("/finance/receipts")}>
+            Receipts
+          </AdminButton>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <AdminCard className="p-6 xl:col-span-2">
+          <SectionHeader title="Unmatched Gateway Payments" icon={<AlertCircle size={18} />} />
+          <div className="mt-4 space-y-3">
+            {unmatched.map((payment) => (
+              <div key={payment.id} className="flex items-center justify-between rounded-2xl border border-status-emergency/20 bg-status-emergency/5 p-4">
+                <div>
+                  <p className="text-sm font-bold text-brand-navy">{payment.gatewayTransactionId}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-brand-muted">{payment.gatewayName} • ₹{payment.amount.toLocaleString()}</p>
+                </div>
+                <AdminButton variant="outline" size="sm" onClick={async () => {
+                  await paymentRepository.matchGatewayPayment(payment.gatewayTransactionId ?? "", "inv2")
+                  toast.success("Gateway payment matched to invoice")
+                  navigate(`/finance/payments/${payment.id}`)
+                }}>
+                  Match
+                </AdminButton>
+              </div>
+            ))}
+            {unmatched.length === 0 && <p className="text-sm text-brand-muted">No unmatched gateway payments.</p>}
+          </div>
+        </AdminCard>
+
+        <AdminCard className="p-6">
+          <SectionHeader title="COD Pending Verification" icon={<ShieldCheck size={18} />} />
+          <div className="mt-4 space-y-3">
+            {codPending.map((payment) => (
+              <div key={payment.id} className="rounded-2xl bg-brand-navy/5 p-4">
+                <p className="text-sm font-bold text-brand-navy">{payment.customerName}</p>
+                <p className="text-[10px] uppercase tracking-widest text-brand-muted">{payment.technicianName} • ₹{payment.amount.toLocaleString()}</p>
+                <button
+                  onClick={async () => {
+                    await paymentRepository.verifyCodCollection(payment.id, "billing-admin")
+                    toast.success("COD collection verified")
+                    navigate(`/finance/payments/${payment.id}`)
+                  }}
+                  className="mt-3 text-[10px] font-bold uppercase tracking-widest text-brand-gold"
+                >
+                  Verify collection
+                </button>
+              </div>
+            ))}
+            {codPending.length === 0 && <p className="text-sm text-brand-muted">No COD verification items pending.</p>}
+          </div>
+        </AdminCard>
+      </div>
+
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="relative flex-1">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
-          <input 
-            type="text" 
-            placeholder="Search by Payment ID, Invoice # or Customer..."
+          <input
+            type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search by payment ID, invoice, customer, or gateway transaction..."
+            className="w-full rounded-2xl border border-border bg-white py-3 pl-12 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-          <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="All" />
-          <FilterButton active={filter === 'confirmed'} onClick={() => setFilter('confirmed')} label="Confirmed" />
-          <FilterButton active={filter === 'pending_verification'} onClick={() => setFilter('pending_verification')} label="Pending" />
-          <FilterButton active={filter === 'failed'} onClick={() => setFilter('failed')} label="Failed" />
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <FilterButton active={statusFilter === "all"} onClick={() => setStatusFilter("all")} label="All" />
+          <FilterButton active={statusFilter === "confirmed"} onClick={() => setStatusFilter("confirmed")} label="Confirmed" />
+          <FilterButton active={statusFilter === "pending_verification"} onClick={() => setStatusFilter("pending_verification")} label="Pending" />
+          <FilterButton active={statusFilter === "refunded"} onClick={() => setStatusFilter("refunded")} label="Refunded" />
         </div>
       </div>
 
@@ -91,54 +155,50 @@ export default function PaymentListScreen() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="text-left border-b border-border bg-brand-navy/[0.02]">
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Payment Info</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Customer</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Method</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest text-right">Amount</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Status</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest text-right">Actions</th>
+              <tr className="border-b border-border bg-brand-navy/[0.02] text-left">
+                <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Payment</th>
+                <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Method</th>
+                <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Amount</th>
+                <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Status</th>
+                <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Date</th>
+                <th className="p-6 text-right text-[10px] font-bold uppercase tracking-widest text-brand-muted">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredPayments.map((p, idx) => (
-                <motion.tr
-                  key={p.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  className="group hover:bg-brand-navy/[0.01] transition-colors"
-                >
+              {filteredPayments.map((payment, index) => (
+                <motion.tr key={payment.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}>
                   <td className="p-6">
                     <div className="flex items-center gap-4">
-                      <div className="size-10 bg-brand-navy/5 rounded-xl flex items-center justify-center text-brand-navy shrink-0">
-                        <CreditCard size={20} />
+                      <div className="flex size-10 items-center justify-center rounded-xl bg-brand-navy/5 text-brand-navy">
+                        <CreditCard size={18} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-brand-navy">{p.paymentId}</p>
-                        <p className="text-[10px] text-brand-muted uppercase tracking-widest">Inv: {p.invoiceNumber}</p>
+                        <p className="text-sm font-bold text-brand-navy">{payment.paymentId}</p>
+                        <p className="text-[10px] uppercase tracking-widest text-brand-muted">{payment.invoiceNumber} • {payment.customerName}</p>
                       </div>
                     </div>
+                  </td>
+                  <td className="p-6">
+                    <MethodBadge method={payment.method} />
+                  </td>
+                  <td className="p-6">
+                    <p className="text-sm font-bold text-brand-navy">₹{payment.amount.toLocaleString()}</p>
+                    {payment.gatewayTransactionId && (
+                      <p className="text-[10px] uppercase tracking-widest text-brand-muted">{payment.gatewayTransactionId}</p>
+                    )}
+                  </td>
+                  <td className="p-6">
+                    <StatusBadge status={payment.status} />
                   </td>
                   <td className="p-6">
                     <div className="flex items-center gap-2">
-                      <User size={14} className="text-brand-muted" />
-                      <p className="text-xs font-bold text-brand-navy">{p.customerName}</p>
+                      <Clock size={14} className="text-brand-muted" />
+                      <span className="text-xs font-bold text-brand-navy">{new Date(payment.date).toLocaleDateString()}</span>
                     </div>
                   </td>
                   <td className="p-6">
-                    <MethodBadge method={p.method} />
-                  </td>
-                  <td className="p-6 text-right">
-                    <p className="text-sm font-bold text-brand-navy">₹{p.amount.toLocaleString()}</p>
-                    <p className="text-[10px] text-brand-muted uppercase tracking-widest">{new Date(p.date).toLocaleDateString()}</p>
-                  </td>
-                  <td className="p-6">
-                    <StatusBadge status={p.status} />
-                  </td>
-                  <td className="p-6">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => navigate(`/finance/payments/${p.id}`)} className="p-2 text-brand-muted hover:text-brand-gold transition-colors">
+                      <button onClick={() => navigate(`/finance/payments/${payment.id}`)} className="rounded-lg p-2 text-brand-muted transition-colors hover:text-brand-gold">
                         <ChevronRight size={20} />
                       </button>
                     </div>
@@ -153,13 +213,13 @@ export default function PaymentListScreen() {
   )
 }
 
-function FilterButton({ active, onClick, label }: any) {
+function FilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
-        "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-        active ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted border border-border hover:border-brand-gold"
+        "whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all",
+        active ? "bg-brand-navy text-brand-gold" : "border border-border bg-white text-brand-muted hover:border-brand-gold",
       )}
     >
       {label}
@@ -168,33 +228,28 @@ function FilterButton({ active, onClick, label }: any) {
 }
 
 function MethodBadge({ method }: { method: PaymentMethod }) {
-  const methodMap: Record<PaymentMethod, { text: string, color: string }> = {
-    online: { text: 'Online', color: 'bg-brand-navy/5 text-brand-navy' },
-    cod: { text: 'COD', color: 'bg-brand-gold/10 text-brand-gold' },
-    bank_transfer: { text: 'Bank Transfer', color: 'bg-status-completed/10 text-status-completed' },
-    cheque: { text: 'Cheque', color: 'bg-brand-muted/10 text-brand-muted' },
-    corporate_credit: { text: 'Corp Credit', color: 'bg-brand-navy text-white' },
-  };
-  const config = methodMap[method];
-  return (
-    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase", config.color)}>
-      {config.text}
-    </span>
-  )
+  const methodMap: Record<PaymentMethod, { label: string; className: string }> = {
+    online: { label: "Online", className: "bg-brand-navy/5 text-brand-navy" },
+    cod: { label: "COD", className: "bg-brand-gold/10 text-brand-gold" },
+    bank_transfer: { label: "Bank Transfer", className: "bg-status-completed/10 text-status-completed" },
+    cheque: { label: "Cheque", className: "bg-brand-muted/10 text-brand-muted" },
+    corporate_credit: { label: "Corporate", className: "bg-brand-navy text-white" },
+  }
+
+  const config = methodMap[method]
+  return <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", config.className)}>{config.label}</span>
 }
 
 function StatusBadge({ status }: { status: PaymentStatus }) {
-  const statusMap: Record<PaymentStatus, { color: string, text: string, icon: any }> = {
-    confirmed: { color: 'bg-status-completed/10 text-status-completed', text: 'Confirmed', icon: <CheckCircle2 size={10} /> },
-    pending_verification: { color: 'bg-brand-gold/10 text-brand-gold', text: 'Pending', icon: <Clock size={10} /> },
-    failed: { color: 'bg-status-emergency/10 text-status-emergency', text: 'Failed', icon: <AlertCircle size={10} /> },
-    refunded: { color: 'bg-brand-navy/10 text-brand-navy', text: 'Refunded', icon: <AlertCircle size={10} /> },
-    disputed: { color: 'bg-brand-navy text-white', text: 'Disputed', icon: <AlertCircle size={10} /> },
-  };
-  const config = statusMap[status];
-  return (
-    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit", config.color)}>
-      {config.icon} {config.text}
-    </span>
-  )
+  const statusMap: Record<PaymentStatus, { label: string; className: string }> = {
+    initiated: { label: "Initiated", className: "bg-brand-navy/5 text-brand-navy" },
+    confirmed: { label: "Confirmed", className: "bg-status-completed/10 text-status-completed" },
+    pending_verification: { label: "Pending", className: "bg-brand-gold/10 text-brand-gold" },
+    failed: { label: "Failed", className: "bg-status-emergency/10 text-status-emergency" },
+    refunded: { label: "Refunded", className: "bg-brand-navy/10 text-brand-navy" },
+    unmatched: { label: "Unmatched", className: "bg-status-emergency/10 text-status-emergency" },
+  }
+
+  const config = statusMap[status]
+  return <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", config.className)}>{config.label}</span>
 }

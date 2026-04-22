@@ -8,6 +8,7 @@ import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { systemRepository, SystemHealth } from "@/core/network/system-repository"
+import { useSystemUX } from "@/core/system/SystemUXProvider"
 import { 
   Activity, 
   Zap, 
@@ -38,6 +39,7 @@ import {
 export default function SystemHealthDashboard() {
   const [health, setHealth] = React.useState<SystemHealth | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
+  const { isOnline, lastSyncAt } = useSystemUX()
 
   const fetchHealth = async () => {
     setIsLoading(true);
@@ -84,6 +86,16 @@ export default function SystemHealthDashboard() {
         </div>
       </div>
 
+      {!isOnline && (
+        <AdminCard className="p-4 border border-brand-gold/30 bg-brand-gold/10">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-brand-navy">Cached State</p>
+          <p className="mt-2 text-sm text-brand-navy">
+            Offline mode is active. Showing the last available system snapshot
+            {lastSyncAt ? ` from ${new Date(lastSyncAt).toLocaleString()}.` : "."}
+          </p>
+        </AdminCard>
+      )}
+
       {/* System Status Banner */}
       <AdminCard className={cn(
         "p-6 border-l-8",
@@ -114,7 +126,13 @@ export default function SystemHealthDashboard() {
         <MetricCard label="API Latency" value={`${health.apiLatency}ms`} trend="Avg: 130ms" icon={<Zap size={20} />} color="gold" />
         <MetricCard label="Active Sessions" value={health.activeUsers} trend="+12% vs last hour" icon={<Activity size={20} />} color="navy" />
         <MetricCard label="Error Rate" value={`${health.errorRate}%`} trend="Target: <0.05%" icon={<AlertCircle size={20} />} color="red" />
-        <MetricCard label="Last Sync" value="2m ago" trend="Auto-sync: Enabled" icon={<RefreshCw size={20} />} color="green" />
+        <MetricCard
+          label="Last Sync"
+          value={lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "Not synced"}
+          trend="Auto-sync queue enabled"
+          icon={<RefreshCw size={20} />}
+          color="green"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -214,13 +232,7 @@ export default function SystemHealthDashboard() {
               <p className="text-xs text-brand-navy mb-3">Versions below v1.0.0 are no longer supported due to security updates.</p>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-brand-muted font-bold uppercase">Min Support: v1.0.0</span>
-                <AdminButton 
-                  size="sm" 
-                  className="bg-status-emergency hover:bg-status-emergency/90"
-                  onClick={() => alert("System Policy Update: This will force all users to v1.2.0. Continue?")}
-                >
-                  Update Policy
-                </AdminButton>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-status-emergency">Policy managed by release ops</span>
               </div>
             </div>
           </div>

@@ -37,11 +37,13 @@ export interface WarrantyRecord {
   id: string;
   equipmentId: string;
   equipmentDisplayId: string;
+  customerName?: string;
   partName: string;
   replacementDate: string;
   expiryDate: string;
   technicianName: string;
   srId: string;
+  status?: 'active' | 'expiring' | 'expired';
 }
 
 export interface EquipmentRepository {
@@ -179,7 +181,7 @@ export class LiveEquipmentRepository implements EquipmentRepository {
   }
 
   async getWarrantyRecords(filters: any) {
-    const response = await apiClient.get<WarrantyRecord[]>('/api/v1/equipment/warranty-records', { params: filters });
+    const response = await apiClient.get<WarrantyRecord[]>('/api/v1/warranty/records', { params: filters });
     return response.data;
   }
 }

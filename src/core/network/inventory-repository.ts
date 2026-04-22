@@ -15,12 +15,14 @@ export interface Part {
   description: string;
   compatibleBrands: string[];
   unitCost: number;
+  sellingPrice?: number;
   stockQuantity: number;
   minReorderLevel: number;
   reorderQuantity: number;
   location: string;
   status: StockStatus;
   imageUrl?: string;
+  supplierIds?: string[];
 }
 
 export interface StockMovement {
@@ -80,15 +82,20 @@ export interface Supplier {
 export interface InventoryRepository {
   getParts(filters: any): Promise<Part[]>;
   getPartById(id: string): Promise<Part | null>;
+  createPart(data: Partial<Part>): Promise<Part>;
   updatePart(id: string, data: Partial<Part>): Promise<Part>;
   getPartsRequests(filters: any): Promise<PartsRequest[]>;
   getPartsRequestById(id: string): Promise<PartsRequest | null>;
   processPartsRequest(id: string, status: string, items: any[]): Promise<void>;
   getStockMovements(filters: any): Promise<StockMovement[]>;
+  adjustStock(partId: string, quantity: number, reason: string): Promise<void>;
   getPurchaseOrders(filters: any): Promise<PurchaseOrder[]>;
   getPurchaseOrderById(id: string): Promise<PurchaseOrder | null>;
   createPurchaseOrder(po: Partial<PurchaseOrder>): Promise<PurchaseOrder>;
+  receivePurchaseOrder(id: string, receivedQtys: Record<string, number>): Promise<void>;
+  getLowStockAlerts(): Promise<Part[]>;
   getSuppliers(): Promise<Supplier[]>;
+  addSupplier(supplier: Partial<Supplier>): Promise<Supplier>;
   getInventoryStats(): Promise<any>;
 }
 
@@ -152,6 +159,17 @@ export class MockInventoryRepository implements InventoryRepository {
     return this.parts.find(p => p.id === id) || null;
   }
 
+  async createPart(data: Partial<Part>) {
+    const newPart = {
+      ...data,
+      id: `p${this.parts.length + 1}`,
+      status: 'in_stock',
+      stockQuantity: data.stockQuantity || 0,
+    } as Part;
+    this.parts.push(newPart);
+    return newPart;
+  }
+
   async updatePart(id: string, data: Partial<Part>) {
     const i = this.parts.findIndex(p => p.id === id);
     if (i !== -1) {
@@ -206,6 +224,28 @@ export class MockInventoryRepository implements InventoryRepository {
     return this.movements.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
+  async adjustStock(partId: string, quantity: number, reason: string) {
+    const part = this.parts.find((item) => item.id === partId);
+    if (!part) {
+      throw new Error('Part not found');
+    }
+
+    part.stockQuantity += quantity;
+    this.movements.unshift({
+      id: `m${this.movements.length + 1}`,
+      partId: part.id,
+      partName: part.name,
+      type: 'ADJ',
+      quantity: Math.abs(quantity),
+      balanceAfter: part.stockQuantity,
+      referenceId: `ADJ-${part.partCode}`,
+      referenceType: 'manual',
+      timestamp: new Date().toISOString(),
+      actor: 'Inventory Manager',
+      notes: reason,
+    });
+  }
+
   async getPurchaseOrders(_filters: any) {
     return this.pos;
   }
@@ -226,8 +266,56 @@ export class MockInventoryRepository implements InventoryRepository {
     return newPO;
   }
 
+  async receivePurchaseOrder(id: string, receivedQtys: Record<string, number>) {
+    const po = this.pos.find((item) => item.id === id);
+    if (!po) {
+      throw new Error('Purchase order not found');
+    }
+
+    po.items = po.items.map((item) => {
+      const receivedQty = receivedQtys[item.partId] ?? item.receivedQty;
+      const part = this.parts.find((record) => record.id === item.partId);
+      if (part && receivedQty > item.receivedQty) {
+        const increment = receivedQty - item.receivedQty;
+        part.stockQuantity += increment;
+        this.movements.unshift({
+          id: `m${this.movements.length + 1}`,
+          partId: part.id,
+          partName: part.name,
+          type: 'IN',
+          quantity: increment,
+          balanceAfter: part.stockQuantity,
+          referenceId: po.poNumber,
+          referenceType: 'po',
+          timestamp: new Date().toISOString(),
+          actor: 'Warehouse Receipt',
+        });
+      }
+
+      return { ...item, receivedQty };
+    });
+
+    po.receivedAt = new Date().toISOString();
+    po.status = po.items.every((item) => item.receivedQty >= item.orderedQty) ? 'fully_received' : 'partially_received';
+  }
+
+  async getLowStockAlerts() {
+    return this.parts.filter((part) => part.stockQuantity <= part.minReorderLevel);
+  }
+
   async getSuppliers() {
     return this.suppliers;
+  }
+
+  async addSupplier(supplier: Partial<Supplier>) {
+    const nextSupplier = {
+      id: `s${this.suppliers.length + 1}`,
+      leadTimeDays: 0,
+      paymentTerms: 'Net 30',
+      ...supplier,
+    } as Supplier;
+    this.suppliers.push(nextSupplier);
+    return nextSupplier;
   }
 
   async getInventoryStats() {
@@ -256,8 +344,13 @@ export class LiveInventoryRepository implements InventoryRepository {
     return response.data;
   }
 
+  async createPart(data: Partial<Part>) {
+    const response = await apiClient.post<Part>('/api/v1/inventory/parts', data);
+    return response.data;
+  }
+
   async updatePart(id: string, data: Partial<Part>) {
-    const response = await apiClient.patch<Part>(`/api/v1/inventory/parts/${id}`, data);
+    const response = await apiClient.put<Part>(`/api/v1/inventory/parts/${id}`, data);
     return response.data;
   }
 
@@ -272,12 +365,17 @@ export class LiveInventoryRepository implements InventoryRepository {
   }
 
   async processPartsRequest(id: string, status: string, items: any[]) {
-    await apiClient.post(`/api/v1/inventory/requests/${id}/process`, { status, items });
+    const action = status === 'approved' ? 'approve' : status === 'partially_approved' ? 'partial' : 'reject';
+    await apiClient.patch(`/api/v1/inventory/parts-requests/${id}/${action}`, { items });
   }
 
   async getStockMovements(filters: any) {
-    const response = await apiClient.get<StockMovement[]>('/api/v1/inventory/movements', { params: filters });
+    const response = await apiClient.get<StockMovement[]>('/api/v1/inventory/stock-movements', { params: filters });
     return response.data;
+  }
+
+  async adjustStock(partId: string, quantity: number, reason: string) {
+    await apiClient.post('/api/v1/inventory/stock-adjust', { partId, quantity, reason });
   }
 
   async getPurchaseOrders(filters: any) {
@@ -295,13 +393,27 @@ export class LiveInventoryRepository implements InventoryRepository {
     return response.data;
   }
 
+  async receivePurchaseOrder(id: string, receivedQtys: Record<string, number>) {
+    await apiClient.patch(`/api/v1/inventory/purchase-orders/${id}/receive`, { receivedQtys });
+  }
+
+  async getLowStockAlerts() {
+    const response = await apiClient.get<Part[]>('/api/v1/inventory/low-stock-alerts');
+    return response.data;
+  }
+
   async getSuppliers() {
     const response = await apiClient.get<Supplier[]>('/api/v1/inventory/suppliers');
     return response.data;
   }
 
+  async addSupplier(supplier: Partial<Supplier>) {
+    const response = await apiClient.post<Supplier>('/api/v1/inventory/suppliers', supplier);
+    return response.data;
+  }
+
   async getInventoryStats() {
-    const response = await apiClient.get('/api/v1/inventory/stats');
+    const response = await apiClient.get('/api/v1/inventory/dashboard');
     return response.data;
   }
 }

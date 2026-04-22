@@ -9,13 +9,10 @@ import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { inventoryRepository, StockMovement } from "@/core/network/inventory-repository"
 import { 
-  FileText, 
   Search, 
-  Filter, 
   Download, 
   ArrowUpRight, 
   ArrowDownRight,
-  ChevronRight,
   Calendar
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
@@ -24,7 +21,8 @@ import { cn } from "@/lib/utils"
 export default function StockMovementLedger() {
   const [movements, setMovements] = React.useState<StockMovement[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<'all' | 'IN' | 'OUT' | 'ADJ'>('all')
+  const [filter, setFilter] = React.useState<'all' | 'IN' | 'OUT' | 'ADJ' | 'RET'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchMovements = async () => {
@@ -40,7 +38,12 @@ export default function StockMovementLedger() {
     fetchMovements();
   }, [])
 
-  const filteredMovements = movements.filter(m => filter === 'all' || m.type === filter);
+  const filteredMovements = movements.filter((movement) => {
+    const matchesFilter = filter === 'all' || movement.type === filter;
+    const matchesSearch = [movement.partName, movement.referenceId, movement.actor]
+      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -63,6 +66,8 @@ export default function StockMovementLedger() {
             type="text" 
             placeholder="Search by Part Name, Ref ID or Actor..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
@@ -70,6 +75,7 @@ export default function StockMovementLedger() {
           <FilterButton active={filter === 'IN'} onClick={() => setFilter('IN')} label="Stock In" />
           <FilterButton active={filter === 'OUT'} onClick={() => setFilter('OUT')} label="Stock Out" />
           <FilterButton active={filter === 'ADJ'} onClick={() => setFilter('ADJ')} label="Adjustments" />
+          <FilterButton active={filter === 'RET'} onClick={() => setFilter('RET')} label="Returns" />
         </div>
       </div>
 

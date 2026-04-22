@@ -45,12 +45,13 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
   isLoading?: boolean
+  icon?: React.ReactNode
   iconLeft?: React.ReactNode
   iconRight?: React.ReactNode
 }
 
 const AdminButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, fullWidth, asChild = false, isLoading, iconLeft, iconRight, children, ...props }, ref) => {
+  ({ className, variant, size, fullWidth, asChild = false, isLoading, icon, iconLeft, iconRight, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
     return (
       <Comp
@@ -63,7 +64,7 @@ const AdminButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
           <Loader2 className="animate-spin" />
         ) : (
           <>
-            {iconLeft && <span>{iconLeft}</span>}
+            {(iconLeft || icon) && <span>{iconLeft || icon}</span>}
             {children}
             {iconRight && <span>{iconRight}</span>}
           </>

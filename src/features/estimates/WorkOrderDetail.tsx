@@ -4,7 +4,6 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { estimateRepository, WorkOrder } from "@/core/network/estimate-repository"
@@ -18,7 +17,6 @@ import {
   FileText,
   ArrowRight,
   Download,
-  Share2,
   AlertCircle
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
@@ -165,18 +163,15 @@ export default function WorkOrderDetail() {
           <AdminCard className="p-8">
             <SectionHeader title="Execution Timeline" icon={<Clock size={18} />} />
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-4 before:-translate-x-px before:h-full before:w-0.5 before:bg-border">
-              <TimelineItem 
-                title="Work Order Created" 
-                time={new Date(wo.createdAt).toLocaleString()} 
-                desc="Generated automatically upon estimate approval."
-                active
-              />
-              <TimelineItem 
-                title="Parts Dispatched" 
-                time={new Date(wo.createdAt).toLocaleString()} 
-                desc="All required parts have been issued from the warehouse."
-                active
-              />
+              {(wo.approvalTimeline || []).map((entry) => (
+                <TimelineItem
+                  key={entry.id}
+                  title={entry.action.replace('_', ' ')}
+                  time={new Date(entry.timestamp).toLocaleString()}
+                  desc={entry.note || `Handled by ${entry.actorName}.`}
+                  active
+                />
+              ))}
               <TimelineItem 
                 title="Job Execution" 
                 time="In Progress" 

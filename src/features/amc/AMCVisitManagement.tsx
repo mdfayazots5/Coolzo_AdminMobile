@@ -11,25 +11,21 @@ import { amcRepository, AMCVisit } from "@/core/network/amc-repository"
 import { 
   Calendar, 
   Search, 
-  Filter, 
   User, 
-  MapPin, 
   Clock, 
-  ChevronRight,
   CheckCircle2,
-  AlertCircle,
   MoreVertical,
-  ChevronLeft
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { cn } from "@/lib/utils"
-import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
 
 export default function AMCVisitManagement() {
-  const navigate = useNavigate();
   const [visits, setVisits] = React.useState<AMCVisit[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<'all' | 'scheduled' | 'completed' | 'missed'>('all')
+  const [filter, setFilter] = React.useState<'all' | 'pending' | 'scheduled' | 'completed' | 'missed' | 'rescheduled'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
+  const [isUpdatingVisit, setIsUpdatingVisit] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     const fetchVisits = async () => {
@@ -45,7 +41,58 @@ export default function AMCVisitManagement() {
     fetchVisits();
   }, [])
 
-  const filteredVisits = visits.filter(v => filter === 'all' || v.status === filter);
+  const refreshVisits = React.useCallback(async () => {
+    const data = await amcRepository.getVisits({});
+    setVisits(data);
+  }, []);
+
+  const filteredVisits = visits.filter((visit) => {
+    const matchesStatus = filter === 'all' || visit.status === filter;
+    const needle = searchTerm.toLowerCase();
+    const matchesSearch = [visit.customerName, visit.contractNumber, visit.assignedTechnicianName, visit.scheduledDate]
+      .filter(Boolean)
+      .some((value) => value!.toLowerCase().includes(needle));
+    return matchesStatus && matchesSearch;
+  });
+
+  const handleAssign = async (visit: AMCVisit) => {
+    try {
+      setIsUpdatingVisit(visit.id);
+      await amcRepository.assignVisit(visit.id, "dispatch-pending", "Dispatch Pending");
+      await refreshVisits();
+      toast.success("Technician assigned");
+    } catch {
+      toast.error("Failed to assign technician");
+    } finally {
+      setIsUpdatingVisit(null);
+    }
+  };
+
+  const handleReschedule = async (visit: AMCVisit) => {
+    try {
+      setIsUpdatingVisit(visit.id);
+      await amcRepository.rescheduleVisit(visit.id, visit.scheduledDate, "Reschedule pending");
+      await refreshVisits();
+      toast.success("Visit rescheduled");
+    } catch {
+      toast.error("Failed to reschedule visit");
+    } finally {
+      setIsUpdatingVisit(null);
+    }
+  };
+
+  const handleComplete = async (visit: AMCVisit) => {
+    try {
+      setIsUpdatingVisit(visit.id);
+      await amcRepository.completeVisit(visit.id, visit.linkedSRId);
+      await refreshVisits();
+      toast.success("Visit marked complete");
+    } catch {
+      toast.error("Failed to complete visit");
+    } finally {
+      setIsUpdatingVisit(null);
+    }
+  };
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -68,12 +115,16 @@ export default function AMCVisitManagement() {
             type="text" 
             placeholder="Search by customer or contract #..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
           <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="All Visits" />
+          <FilterButton active={filter === 'pending'} onClick={() => setFilter('pending')} label="Pending" />
           <FilterButton active={filter === 'scheduled'} onClick={() => setFilter('scheduled')} label="Scheduled" />
           <FilterButton active={filter === 'completed'} onClick={() => setFilter('completed')} label="Completed" />
+          <FilterButton active={filter === 'rescheduled'} onClick={() => setFilter('rescheduled')} label="Rescheduled" />
           <FilterButton active={filter === 'missed'} onClick={() => setFilter('missed')} label="Missed" />
         </div>
       </div>
@@ -86,7 +137,13 @@ export default function AMCVisitManagement() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.05 }}
           >
-            <VisitCard visit={visit} />
+            <VisitCard
+              visit={visit}
+              isUpdating={isUpdatingVisit === visit.id}
+              onAssign={() => handleAssign(visit)}
+              onReschedule={() => handleReschedule(visit)}
+              onComplete={() => handleComplete(visit)}
+            />
           </motion.div>
         ))}
       </div>
@@ -108,7 +165,19 @@ function FilterButton({ active, onClick, label }: any) {
   )
 }
 
-function VisitCard({ visit }: { visit: AMCVisit }) {
+function VisitCard({
+  visit,
+  isUpdating,
+  onAssign,
+  onReschedule,
+  onComplete,
+}: {
+  visit: AMCVisit;
+  isUpdating: boolean;
+  onAssign: () => void;
+  onReschedule: () => void;
+  onComplete: () => void;
+}) {
   return (
     <AdminCard className="p-6 hover:shadow-xl transition-all group">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -135,7 +204,14 @@ function VisitCard({ visit }: { visit: AMCVisit }) {
               <span className="flex items-center gap-1 font-bold text-brand-navy"><Clock size={12} /> {visit.scheduledDate}</span>
               <span className="size-1 bg-border rounded-full" />
               <span>{visit.scheduledSlot}</span>
+              {visit.contractNumber ? (
+                <>
+                  <span className="size-1 bg-border rounded-full" />
+                  <span>{visit.contractNumber}</span>
+                </>
+              ) : null}
             </div>
+            {visit.customerName ? <p className="mt-2 text-xs text-brand-muted">{visit.customerName}</p> : null}
           </div>
         </div>
 
@@ -153,11 +229,14 @@ function VisitCard({ visit }: { visit: AMCVisit }) {
 
         <div className="flex items-center justify-between lg:justify-end gap-6">
           <div className="flex gap-2">
-            {visit.status === 'scheduled' && !visit.assignedTechnicianId && (
-              <AdminButton size="sm">Assign Tech</AdminButton>
+            {(visit.status === 'pending' || visit.status === 'scheduled') && !visit.assignedTechnicianId && (
+              <AdminButton size="sm" onClick={onAssign} disabled={isUpdating}>Assign Tech</AdminButton>
             )}
-            {visit.status === 'scheduled' && visit.assignedTechnicianId && (
-              <AdminButton size="sm" variant="outline">Reschedule</AdminButton>
+            {(visit.status === 'scheduled' || visit.status === 'rescheduled') && visit.assignedTechnicianId && (
+              <>
+                <AdminButton size="sm" variant="outline" onClick={onReschedule} disabled={isUpdating}>Reschedule</AdminButton>
+                <AdminButton size="sm" onClick={onComplete} disabled={isUpdating}>Complete</AdminButton>
+              </>
             )}
             {visit.status === 'completed' && (
               <AdminButton size="sm" variant="outline" icon={<CheckCircle2 size={14} />}>View Report</AdminButton>

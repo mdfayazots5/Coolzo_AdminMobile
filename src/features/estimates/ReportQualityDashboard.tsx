@@ -196,11 +196,3 @@ function IssueRow({ label, count, trend }: any) {
     </div>
   )
 }
-
-function BarChart3({ size }: { size: number }) {
-  return <div className="size-5 bg-brand-navy/5 rounded flex items-end gap-0.5 p-1">
-    <div className="w-1 h-2 bg-brand-navy/40 rounded-full" />
-    <div className="w-1 h-3 bg-brand-navy/60 rounded-full" />
-    <div className="w-1 h-1.5 bg-brand-navy/30 rounded-full" />
-  </div>
-}

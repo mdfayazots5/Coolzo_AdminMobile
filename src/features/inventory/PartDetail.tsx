@@ -17,7 +17,6 @@ import {
   ArrowDownRight,
   AlertTriangle,
   MapPin,
-  Tag,
   Wrench,
   DollarSign,
   Plus,
@@ -58,8 +57,7 @@ export default function PartDetail() {
   const handleAdjustment = async () => {
     if (!part || adjustmentQty === 0 || !adjustmentReason) return;
     try {
-      const newQty = part.stockQuantity + adjustmentQty;
-      await inventoryRepository.updatePart(part.id, { stockQuantity: newQty });
+      await inventoryRepository.adjustStock(part.id, adjustmentQty, adjustmentReason);
       toast.success("Stock adjusted successfully");
       setIsAdjusting(false);
       setAdjustmentQty(0);

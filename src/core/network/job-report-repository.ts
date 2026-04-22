@@ -24,6 +24,12 @@ export interface JobReport {
   customerSignature: string;
   customerRating?: number;
   qualityScore: number;
+  qualityBreakdown?: {
+    checklistCompletion: number;
+    photoCoverage: number;
+    customerSignature: number;
+    observationDepth: number;
+  };
   reviewed: boolean;
   reviewedBy?: string;
   reviewNotes?: string;
@@ -36,6 +42,32 @@ export interface JobReportRepository {
   reviewJobReport(id: string, status: 'approved' | 'flagged', notes: string): Promise<void>;
   getQualityMetrics(): Promise<any>;
 }
+
+const calculateQualityBreakdown = (report: Pick<JobReport, "checklist" | "photos" | "customerSignature" | "observations">) => {
+  const checklistCompletionRate =
+    report.checklist.length === 0
+      ? 0
+      : report.checklist.filter((item) => item.status === "completed").length / report.checklist.length;
+  const checklistCompletion = Math.round(checklistCompletionRate * 40);
+  const photoCoverage = report.photos.length >= 3 ? 30 : report.photos.length === 2 ? 20 : Math.min(report.photos.length * 10, 20);
+  const customerSignature = report.customerSignature ? 20 : 0;
+  const observationDepth = report.observations.trim().length > 50 ? 10 : 0;
+
+  return {
+    checklistCompletion,
+    photoCoverage,
+    customerSignature,
+    observationDepth,
+  };
+};
+
+const calculateQualityScore = (report: Pick<JobReport, "checklist" | "photos" | "customerSignature" | "observations">) => {
+  const breakdown = calculateQualityBreakdown(report);
+  return {
+    breakdown,
+    score: breakdown.checklistCompletion + breakdown.photoCoverage + breakdown.customerSignature + breakdown.observationDepth,
+  };
+};
 
 export class MockJobReportRepository implements JobReportRepository {
   private reports: JobReport[] = [
@@ -59,7 +91,8 @@ export class MockJobReportRepository implements JobReportRepository {
         { url: 'https://picsum.photos/seed/ac2/400/300', type: 'after', caption: 'Clean Filter' }
       ],
       customerSignature: 'data:image/png;base64,mock_signature',
-      qualityScore: 95,
+      qualityScore: 90,
+      qualityBreakdown: { checklistCompletion: 40, photoCoverage: 20, customerSignature: 20, observationDepth: 10 },
       reviewed: false,
       status: 'pending_review'
     },
@@ -83,7 +116,8 @@ export class MockJobReportRepository implements JobReportRepository {
         { url: 'https://picsum.photos/seed/leak/400/300', type: 'before', caption: 'Leak detected' }
       ],
       customerSignature: 'data:image/png;base64,mock_signature',
-      qualityScore: 78,
+      qualityScore: 70,
+      qualityBreakdown: { checklistCompletion: 40, photoCoverage: 10, customerSignature: 20, observationDepth: 0 },
       reviewed: true,
       reviewedBy: 'Admin',
       status: 'approved'
@@ -92,11 +126,28 @@ export class MockJobReportRepository implements JobReportRepository {
 
   async getJobReports(_filters: any) {
     await new Promise(r => setTimeout(r, 500));
-    return this.reports;
+    return this.reports.map((report) => {
+      const { score, breakdown } = calculateQualityScore(report);
+      return {
+        ...report,
+        qualityScore: score,
+        qualityBreakdown: breakdown,
+      };
+    });
   }
 
   async getJobReportById(id: string) {
-    return this.reports.find(r => r.id === id) || null;
+    const report = this.reports.find(r => r.id === id) || null;
+    if (!report) {
+      return null;
+    }
+
+    const { score, breakdown } = calculateQualityScore(report);
+    return {
+      ...report,
+      qualityScore: score,
+      qualityBreakdown: breakdown,
+    };
   }
 
   async reviewJobReport(id: string, status: 'approved' | 'flagged', notes: string) {
@@ -129,21 +180,22 @@ import { isDemoMode } from "../config/api-config";
 
 export class LiveJobReportRepository implements JobReportRepository {
   async getJobReports(filters: any) {
-    const response = await apiClient.get<JobReport[]>('/api/v1/reports/jobs', { params: filters });
+    const response = await apiClient.get<JobReport[]>('/api/v1/job-reports', { params: filters });
     return response.data;
   }
 
   async getJobReportById(id: string) {
-    const response = await apiClient.get<JobReport>(`/api/v1/reports/jobs/${id}`);
+    const response = await apiClient.get<JobReport>(`/api/v1/job-reports/${id}`);
     return response.data;
   }
 
   async reviewJobReport(id: string, status: 'approved' | 'flagged', notes: string) {
-    await apiClient.post(`/api/v1/reports/jobs/${id}/review`, { status, notes });
+    const endpoint = status === 'approved' ? 'approve' : 'flag';
+    await apiClient.patch(`/api/v1/job-reports/${id}/${endpoint}`, { notes });
   }
 
   async getQualityMetrics() {
-    const response = await apiClient.get<any>('/api/v1/reports/quality-metrics');
+    const response = await apiClient.get<any>('/api/v1/job-reports/quality-dashboard');
     return response.data;
   }
 }

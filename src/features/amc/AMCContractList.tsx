@@ -6,7 +6,7 @@
 import * as React from "react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
+import { InlineLoader } from "@/components/shared/Layout"
 import { amcRepository, AMCContract, AMCStatus } from "@/core/network/amc-repository"
 import { 
   FileText, 
@@ -35,7 +35,7 @@ export default function AMCContractList() {
     const fetchContracts = async () => {
       try {
         const data = await amcRepository.getContracts({});
-        setContracts(data);
+        setContracts(sortContracts(data));
       } catch (error) {
         console.error(error);
       } finally {
@@ -82,6 +82,7 @@ export default function AMCContractList() {
           <FilterButton active={statusFilter === 'active'} onClick={() => setStatusFilter('active')} label="Active" />
           <FilterButton active={statusFilter === 'expiring_soon'} onClick={() => setStatusFilter('expiring_soon')} label="Expiring Soon" />
           <FilterButton active={statusFilter === 'expired'} onClick={() => setStatusFilter('expired')} label="Expired" />
+          <FilterButton active={statusFilter === 'cancelled'} onClick={() => setStatusFilter('cancelled')} label="Cancelled" />
         </div>
       </div>
 
@@ -131,7 +132,10 @@ function ContractCard({ contract, onClick }: { contract: AMCContract, onClick: (
   };
 
   const config = statusConfig[contract.status];
-  const progress = (contract.completedVisits / contract.totalVisits) * 100;
+  const progress = contract.totalVisits > 0 ? (contract.completedVisits / contract.totalVisits) * 100 : 0;
+  const nextVisit = contract.visits
+    .filter((visit) => visit.status === 'scheduled' || visit.status === 'pending' || visit.status === 'rescheduled')
+    .sort((left, right) => new Date(left.scheduledDate).getTime() - new Date(right.scheduledDate).getTime())[0];
 
   return (
     <AdminCard 
@@ -153,7 +157,7 @@ function ContractCard({ contract, onClick }: { contract: AMCContract, onClick: (
             </div>
             <p className="text-sm font-bold text-brand-navy mb-1">{contract.customerName}</p>
             <div className="flex items-center gap-3 text-xs text-brand-muted">
-              <span className="flex items-center gap-1"><Calendar size={12} /> Ends {contract.endDate}</span>
+              <span className="flex items-center gap-1"><Calendar size={12} /> Ends {formatDate(contract.endDate)}</span>
               <span className="size-1 bg-border rounded-full" />
               <span className="font-bold uppercase tracking-widest text-brand-gold">{contract.planType} Plan</span>
             </div>
@@ -178,7 +182,7 @@ function ContractCard({ contract, onClick }: { contract: AMCContract, onClick: (
           <div className="text-right">
             <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-1">Next Visit</p>
             <p className="text-sm font-bold text-brand-navy">
-              {contract.visits.find(v => v.status === 'scheduled')?.scheduledDate || 'None'}
+              {nextVisit ? formatDate(nextVisit.scheduledDate) : 'None'}
             </p>
           </div>
           <ChevronRight size={20} className="text-brand-muted group-hover:text-brand-gold transition-colors" />
@@ -186,4 +190,14 @@ function ContractCard({ contract, onClick }: { contract: AMCContract, onClick: (
       </div>
     </AdminCard>
   )
+}
+
+function sortContracts(contracts: AMCContract[]) {
+  return [...contracts].sort(
+    (left, right) => new Date(left.endDate).getTime() - new Date(right.endDate).getTime()
+  );
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString();
 }

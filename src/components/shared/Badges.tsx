@@ -56,22 +56,44 @@ const roleBadgeVariants = cva(
         BILLING_EXECUTIVE: "bg-purple-500 text-white",
         FINANCE_MANAGER: "bg-purple-700 text-white",
         MARKETING_MANAGER: "bg-coral-500 text-white",
+        CUSTOM: "bg-brand-navy/10 text-brand-navy",
       },
     },
     defaultVariants: {
-      role: "ADMIN",
+      role: "CUSTOM",
     }
   }
 )
 
-export interface RoleBadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof roleBadgeVariants> {}
+type RoleBadgeVariant = NonNullable<VariantProps<typeof roleBadgeVariants>["role"]>;
 
-export const RoleBadge: React.FC<RoleBadgeProps> = ({ className, role, ...props }) => {
+const roleVariantMap: Record<string, RoleBadgeVariant> = {
+  SUPER_ADMIN: "SUPER_ADMIN",
+  ADMIN: "ADMIN",
+  OPS_MANAGER: "OPS_MANAGER",
+  OPS_EXECUTIVE: "OPS_EXECUTIVE",
+  SUPPORT: "SUPPORT",
+  TECHNICIAN: "TECHNICIAN",
+  HELPER: "HELPER",
+  INVENTORY_MANAGER: "INVENTORY_MANAGER",
+  BILLING_EXECUTIVE: "BILLING_EXECUTIVE",
+  FINANCE_MANAGER: "FINANCE_MANAGER",
+  MARKETING_MANAGER: "MARKETING_MANAGER",
+};
+
+export interface RoleBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+  role?: string | null
+  label?: string
+}
+
+export const RoleBadge: React.FC<RoleBadgeProps> = ({ className, role, label, ...props }) => {
+  const normalizedRole = role ? role.toUpperCase().replace(/[^A-Z0-9]+/g, "_") : "CUSTOM";
+  const variant = roleVariantMap[normalizedRole] || "CUSTOM";
+  const text = label || role?.replace(/_/g, " ") || "";
+
   return (
-    <div className={cn(roleBadgeVariants({ role }), className)} {...props}>
-      {role ? role.replace('_', ' ') : ''}
+    <div className={cn(roleBadgeVariants({ role: variant }), className)} {...props}>
+      {text}
     </div>
   )
 }

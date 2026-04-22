@@ -6,13 +6,17 @@
 import AppRouter from './routes';
 import { Toaster } from '@/components/ui/sonner';
 import { NetworkStatusBanner } from '@/components/shared/NetworkStatusBanner';
+import { MasterDataProvider } from '@/core/master-data/MasterDataProvider';
+import { SystemUXProvider } from '@/core/system/SystemUXProvider';
 
 export default function App() {
   return (
-    <>
-      <NetworkStatusBanner />
-      <AppRouter />
-      <Toaster position="top-right" richColors />
-    </>
+    <SystemUXProvider>
+      <MasterDataProvider>
+        <NetworkStatusBanner />
+        <AppRouter />
+        <Toaster position="top-right" richColors />
+      </MasterDataProvider>
+    </SystemUXProvider>
   );
 }

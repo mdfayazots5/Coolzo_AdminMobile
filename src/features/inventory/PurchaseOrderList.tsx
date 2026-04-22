@@ -11,15 +11,13 @@ import { inventoryRepository, PurchaseOrder, POStatus } from "@/core/network/inv
 import { 
   Truck, 
   Search, 
-  Filter, 
   Plus, 
   ChevronRight, 
   Clock, 
   CheckCircle2, 
   XCircle, 
   AlertCircle,
-  Calendar,
-  DollarSign
+  Calendar
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { cn } from "@/lib/utils"
@@ -30,6 +28,7 @@ export default function PurchaseOrderList() {
   const [pos, setPos] = React.useState<PurchaseOrder[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [filter, setFilter] = React.useState<POStatus | 'all'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchPOs = async () => {
@@ -45,7 +44,12 @@ export default function PurchaseOrderList() {
     fetchPOs();
   }, [])
 
-  const filteredPOs = pos.filter(p => filter === 'all' || p.status === filter);
+  const filteredPOs = pos.filter((po) => {
+    const matchesFilter = filter === 'all' || po.status === filter;
+    const matchesSearch = [po.poNumber, po.supplierName]
+      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -68,6 +72,8 @@ export default function PurchaseOrderList() {
             type="text" 
             placeholder="Search by PO # or Supplier..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">

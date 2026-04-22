@@ -4,22 +4,18 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { governanceRepository, AuditLog } from "@/core/network/governance-repository"
+import { InlineLoader } from "@/components/shared/Layout"
+import { governanceRepository, AuditLog, DataAccessLog } from "@/core/network/governance-repository"
 import { 
   Search, 
-  Filter, 
   Download, 
   User, 
   Clock, 
-  Shield, 
   Database, 
   ChevronDown, 
   ChevronUp,
-  Activity,
-  Terminal
+  Eye
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { cn } from "@/lib/utils"
@@ -27,15 +23,21 @@ import { toast } from "sonner"
 
 export default function AuditLogs() {
   const [logs, setLogs] = React.useState<AuditLog[]>([])
+  const [dataAccessLogs, setDataAccessLogs] = React.useState<DataAccessLog[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [expandedLog, setExpandedLog] = React.useState<string | null>(null)
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [actionFilter, setActionFilter] = React.useState<string>("all")
 
   React.useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const data = await governanceRepository.getAuditLogs({});
-        setLogs(data);
+        const [auditData, accessData] = await Promise.all([
+          governanceRepository.getAuditLogs({}),
+          governanceRepository.getDataAccessLogs(),
+        ])
+        setLogs(auditData);
+        setDataAccessLogs(accessData);
       } catch (error) {
         console.error(error);
       } finally {
@@ -46,10 +48,21 @@ export default function AuditLogs() {
   }, [])
 
   const filteredLogs = logs.filter(l => 
-    l.userName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    l.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    l.details.toLowerCase().includes(searchQuery.toLowerCase())
+    (actionFilter === "all" || l.action === actionFilter) &&
+    (
+      l.userName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      l.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      l.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      l.entityType.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   );
+
+  const filteredDataAccessLogs = dataAccessLogs.filter((log) =>
+    log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    log.piiField.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    log.entityType.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -86,13 +99,18 @@ export default function AuditLogs() {
           />
         </div>
         <div className="flex gap-2">
-          <AdminButton 
-            variant="outline" 
-            icon={<Filter size={18} />}
-            onClick={() => toast.info("Advanced Filters coming in Phase 3")}
+          <select
+            value={actionFilter}
+            onChange={(event) => setActionFilter(event.target.value)}
+            className="rounded-2xl border border-border bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-brand-gold"
           >
-            Filters
-          </AdminButton>
+            <option value="all">All Actions</option>
+            <option value="create">Create</option>
+            <option value="update">Update</option>
+            <option value="delete">Delete</option>
+            <option value="login">Login</option>
+            <option value="export">Export</option>
+          </select>
         </div>
       </div>
 
@@ -174,6 +192,48 @@ export default function AuditLogs() {
                     </tr>
                   )}
                 </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </AdminCard>
+
+      <AdminCard className="p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-brand-navy">Sensitive Data Access</h2>
+            <p className="text-xs text-brand-muted">Read-only visibility into PII access audit events.</p>
+          </div>
+          <div className="size-12 rounded-2xl bg-brand-navy/5 flex items-center justify-center text-brand-navy">
+            <Eye size={20} />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border bg-brand-navy/[0.02] text-left">
+                <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Timestamp</th>
+                <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted">User</th>
+                <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Entity</th>
+                <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted">PII Field</th>
+                <th className="p-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted text-right">IP Address</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filteredDataAccessLogs.map((log) => (
+                <tr key={log.id}>
+                  <td className="p-4 text-xs text-brand-navy">{new Date(log.timestamp).toLocaleString()}</td>
+                  <td className="p-4">
+                    <p className="text-xs font-semibold text-brand-navy">{log.userName}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-brand-muted">{log.userRole}</p>
+                  </td>
+                  <td className="p-4">
+                    <p className="text-xs font-semibold text-brand-navy">{log.entityType}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-brand-muted">{log.entityId}</p>
+                  </td>
+                  <td className="p-4 text-xs text-brand-navy">{log.piiField}</td>
+                  <td className="p-4 text-right text-[10px] font-mono text-brand-muted">{log.ipAddress}</td>
+                </tr>
               ))}
             </tbody>
           </table>

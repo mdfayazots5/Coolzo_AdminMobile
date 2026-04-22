@@ -4,23 +4,22 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { estimateRepository, Estimate, LineItem } from "@/core/network/estimate-repository"
+import { estimateRepository, Estimate } from "@/core/network/estimate-repository"
 import { 
   FileText, 
   ChevronLeft, 
   Clock, 
   CheckCircle2, 
   XCircle, 
-  User, 
   ArrowRight,
   Download,
   Share2,
   MessageSquare,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  Send
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { cn } from "@/lib/utils"
@@ -32,6 +31,7 @@ export default function EstimateDetail() {
   const navigate = useNavigate();
   const [estimate, setEstimate] = React.useState<Estimate | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
+  const [reviewReason, setReviewReason] = React.useState("")
 
   React.useEffect(() => {
     const fetchEstimate = async () => {
@@ -51,7 +51,7 @@ export default function EstimateDetail() {
   const handleStatusUpdate = async (status: 'approved' | 'rejected') => {
     if (!estimate) return;
     try {
-      await estimateRepository.updateEstimateStatus(estimate.id, status);
+      await estimateRepository.updateEstimateStatus(estimate.id, status, reviewReason);
       toast.success(`Estimate ${status === 'approved' ? 'Approved' : 'Rejected'}`);
       const updated = await estimateRepository.getEstimateById(estimate.id);
       setEstimate(updated);
@@ -59,6 +59,30 @@ export default function EstimateDetail() {
       toast.error("Failed to update status");
     }
   }
+
+  const handleOverrideApproval = async () => {
+    if (!estimate) return;
+    try {
+      await estimateRepository.overrideApproveEstimate(estimate.id, reviewReason || "Admin override");
+      toast.success("Estimate approved by override");
+      const updated = await estimateRepository.getEstimateById(estimate.id);
+      setEstimate(updated);
+    } catch {
+      toast.error("Failed to override approval");
+    }
+  };
+
+  const handleResend = async () => {
+    if (!estimate) return;
+    try {
+      await estimateRepository.resendEstimate(estimate.id);
+      toast.success("Estimate resent to customer");
+      const updated = await estimateRepository.getEstimateById(estimate.id);
+      setEstimate(updated);
+    } catch {
+      toast.error("Failed to resend estimate");
+    }
+  };
 
   if (isLoading) return <InlineLoader className="h-screen" />;
   if (!estimate) return <div className="p-8 text-center">Estimate not found</div>;
@@ -79,14 +103,18 @@ export default function EstimateDetail() {
           <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
             <Download size={20} />
           </button>
-          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
+          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all" onClick={handleResend}>
             <Share2 size={20} />
           </button>
+          <AdminButton variant="outline" icon={<Send size={16} />} onClick={handleResend}>Resend</AdminButton>
           {estimate.status === 'pending' && (
             <AdminButton variant="outline" onClick={() => handleStatusUpdate('rejected')}>Reject</AdminButton>
           )}
           {estimate.status === 'pending' && (
             <AdminButton onClick={() => handleStatusUpdate('approved')}>Approve & Create WO</AdminButton>
+          )}
+          {estimate.status !== 'approved' && (
+            <AdminButton variant="outline" onClick={handleOverrideApproval}>Override Approve</AdminButton>
           )}
         </div>
       </div>
@@ -105,6 +133,9 @@ export default function EstimateDetail() {
               <InfoRow label="Technician" value={estimate.technicianName} />
               <InfoRow label="Created On" value={new Date(estimate.createdAt).toLocaleDateString()} />
               <InfoRow label="Channel" value={estimate.channel} />
+              {estimate.expiryAt ? <InfoRow label="Expires On" value={new Date(estimate.expiryAt).toLocaleDateString()} /> : null}
+              {estimate.customerResponse ? <InfoRow label="Customer Response" value={estimate.customerResponse} /> : null}
+              {estimate.requiresCorporateApproval ? <InfoRow label="Approval Chain" value="Corporate Threshold" /> : null}
               {estimate.respondedAt && (
                 <InfoRow label="Responded On" value={new Date(estimate.respondedAt).toLocaleDateString()} />
               )}
@@ -128,6 +159,16 @@ export default function EstimateDetail() {
                 <span className="text-2xl font-bold">₹{estimate.total.toLocaleString()}</span>
               </div>
             </div>
+          </AdminCard>
+
+          <AdminCard className="p-6">
+            <SectionHeader title="Approval Controls" icon={<MessageSquare size={18} />} />
+            <textarea
+              className="mt-4 h-28 w-full rounded-2xl border border-border bg-brand-navy/5 p-4 text-sm outline-none transition-all focus:border-brand-gold"
+              placeholder="Reason for approval, rejection, resend, or override"
+              value={reviewReason}
+              onChange={(event) => setReviewReason(event.target.value)}
+            />
           </AdminCard>
 
           {estimate.workOrderId && (
@@ -195,27 +236,16 @@ export default function EstimateDetail() {
           <AdminCard className="p-8">
             <SectionHeader title="Approval Timeline" icon={<Clock size={18} />} />
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-4 before:-translate-x-px before:h-full before:w-0.5 before:bg-border">
-              <TimelineItem 
-                title="Estimate Created" 
-                time={new Date(estimate.createdAt).toLocaleString()} 
-                desc={`Created by ${estimate.technicianName} in the field.`}
-                active
-              />
-              <TimelineItem 
-                title="Sent to Customer" 
-                time={new Date(estimate.createdAt).toLocaleString()} 
-                desc={`Sent via ${estimate.channel} for approval.`}
-                active
-              />
-              {estimate.respondedAt && (
-                <TimelineItem 
-                  title={estimate.status === 'approved' ? "Customer Approved" : "Customer Rejected"} 
-                  time={new Date(estimate.respondedAt).toLocaleString()} 
-                  desc={estimate.status === 'approved' ? "Customer accepted the scope and pricing." : "Customer declined the additional work."}
+              {(estimate.approvalHistory || []).map((event) => (
+                <TimelineItem
+                  key={event.id}
+                  title={formatApprovalAction(event.action)}
+                  time={new Date(event.timestamp).toLocaleString()}
+                  desc={event.note || `Handled by ${event.actorName}.`}
                   active
-                  status={estimate.status}
+                  status={event.action === 'rejected' ? 'rejected' : event.action === 'override_approved' || event.action === 'approved' ? 'approved' : undefined}
                 />
-              )}
+              ))}
             </div>
           </AdminCard>
         </div>
@@ -266,4 +296,23 @@ function TimelineItem({ title, time, desc, active, status }: any) {
       </div>
     </div>
   )
+}
+
+function formatApprovalAction(action: string) {
+  switch (action) {
+    case 'override_approved':
+      return 'Admin Override Approval';
+    case 'resent':
+      return 'Estimate Resent';
+    case 'sent':
+      return 'Sent to Customer';
+    case 'created':
+      return 'Estimate Created';
+    case 'approved':
+      return 'Customer Approved';
+    case 'rejected':
+      return 'Customer Rejected';
+    default:
+      return action;
+  }
 }

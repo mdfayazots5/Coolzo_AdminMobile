@@ -4,23 +4,39 @@ This document tracks the status of real API integrations across the Coolzo Admin
 
 **Global Toggle:** `DEMO_FLAG` (Defined in `src/core/config/api-config.ts`)
 
+Current truth note:
+Only Batch 1, Batch 2, and Batch 18 have been re-verified against the current .NET backend in the 2026-04-19 admin-mobile audit pass. Later batch rows below are historical entries until they are re-audited against live controllers and repositories.
+
 ---
 
 ## Batch 1: Authentication & Identity
 | Screen Name | API Endpoint | Status | Request Structure | Response Structure | Fields Mapping |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Login Screen | `POST /auth/login` | Done | `{ email, password }` | `{ user, token, refreshToken, requires2FA }` | `email -> email`, `password -> password` |
-| Field Login | `POST /auth/login-field` | Done | `{ employeeId, pin }` | `{ user, token, refreshToken }` | `employeeId -> employeeId`, `pin -> pin` |
-| OTP Verification | `POST /auth/verify-otp` | Done | `{ email, otp }` | `{ user, token, refreshToken }` | `otp -> otp` |
-| Forgot Password | `POST /auth/forgot-password` | Done | `{ email }` | `void` | `email -> email` |
-| Reset Password | `POST /auth/reset-password` | Done | `{ token, password }` | `void` | `token -> token`, `password -> password` |
-| My Profile | `GET /users/me` | Done | `void` | `{ id, name, email, role, avatar }` | `id -> id`, `name -> name` |
+| Login Screen | `POST /api/v1/auth/login` | Done | `{ userNameOrEmail, password }` | `ApiResponse<{ accessToken, refreshToken, expiresAtUtc, currentUser }>` | `email or username -> userNameOrEmail`, `password -> password` |
+| Field Login | `POST /api/v1/auth/login-field` | Done | `{ employeeId, pin }` | `ApiResponse<{ accessToken, refreshToken, expiresAtUtc, currentUser }>` | `employeeId -> employeeId`, `pin -> pin` |
+| OTP Verification | `POST /api/v1/auth/verify-otp` | Done | `{ email, otp }` | `ApiResponse<{ accessToken, refreshToken, expiresAtUtc, currentUser }>` | `otp -> otp` |
+| Forgot Password | `POST /api/v1/auth/forgot-password` | Done | `{ email }` | `ApiResponse<{ success, message }>` | `email -> email` |
+| Reset Password | `POST /api/v1/auth/reset-password` | Done | `{ token, password }` | `ApiResponse<{ success, message }>` | `token -> token`, `password -> password` |
+| My Profile | `GET /api/v1/auth/me` | Done | `void` | `ApiResponse<CurrentUserResponse>` | `fullName -> name`, `roles[0] -> role`, `permissions -> permissions[]` |
+| Token Refresh | `POST /api/v1/auth/refresh-token` | Done | `{ accessToken, refreshToken }` | `ApiResponse<{ accessToken, refreshToken, expiresAtUtc, currentUser }>` | Axios 401 interceptor retries once per request, max 3 refresh attempts total |
+| Logout | `POST /api/v1/auth/logout` | Done | `{ refreshToken }` | `ApiResponse<{ success, message }>` | Sign-out clears local auth + permission cache |
+| Permission Snapshot | `GET /api/v1/auth/me/permissions` | Done | `void` | `ApiResponse<{ modules, dataScope, permissions[] }>` | `modules` -> client RBAC matrix, `permissions[]` retained for compatibility |
+| Force Logout | `POST /api/v1/auth/force-logout/{userId}` | Done | `void` | `ApiResponse<{ success, message }>` | Super Admin only |
 | Forgot PIN | N/A | Done | N/A | N/A | Info Screen / Help Desk |
 | Session Expired | N/A | Done | N/A | N/A | UI State |
+
+Batch 1 verification note:
+- 2026-04-19: Phase 1 was re-verified end to end against the live ASP.NET Core auth stack and the actual Vite/React admin-mobile client. Fixed the backend `login-field` contract so technician/helper employee codes resolve to real users, aligned `tblOtpVerification` access to the current schema by removing the stale `BranchId` mapping, constrained password-reset tokens to the live 16-character OTP column, changed the staff login field to accept username or email, aligned post-login routing to `/admin/dashboard`, `/technician/home`, `/operations/dashboard`, `/support/dashboard`, `/finance/dashboard`, and `/marketing/dashboard`, and added `e2e/tests/auth.spec.js` to cover login, field login, OTP verify/login, refresh, logout, force logout, forgot password, and reset password. The phase-1 auth suite now passes in full.
 
 ## Batch 2: System & Governance
 | Screen Name | API Endpoint | Status | Request Structure | Response Structure | Fields Mapping |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| RBAC Provider Bootstrap | `GET /api/v1/auth/me/permissions` | Done | `void` | `ApiResponse<{ modules, dataScope, permissions[] }>` | Backend module/action matrix -> `PermissionSet` cache in local storage |
+| Role List | `GET /api/v1/roles` | Done | `{ pageNumber, pageSize }` | `ApiResponse<PagedResult<RoleResponse>>` | `displayName -> name`, `permissions[] -> permission matrix` |
+| Role Permission Snapshot | `GET /api/v1/roles/{id}/permissions` | Done | `void` | `ApiResponse<{ roleId, permissionIds[], modules, dataScope, permissions[], roleName, displayName }>` | Role editor loads live permission matrix |
+| Role Permission Update | `PUT /api/v1/roles/{id}/permissions` | Done | `{ permissionIds[] }` | `ApiResponse<RoleResponse>` | Permission matrix save maps selected UI actions back to backend permission ids |
+| View As Role | `POST /api/v1/admin/view-as-role` | Done | `{ roleId }` | `ApiResponse<{ roleId, roleName, displayName, modules, dataScope, permissions[], issuedAtUtc }>` | Super Admin gets scoped UI permission snapshot, header `X-Coolzo-View-As-Role` sent while active |
+| Dynamic Navigation Shell | `GET /api/v1/auth/me/permissions` | Done | `void` | Cached client snapshot | Navigation tabs are filtered at runtime via `canView(module)` |
 | System Health | `GET /system/health` | Done | `void` | `SystemHealth` | `status -> status`, `uptime -> uptime`, `version -> version`, `apiLatency -> latency` |
 | Health Refresh | `GET /system/health` | Done | `void` | `SystemHealth` | Triggered by Refresh button |
 | App Permissions | `GET /system/permissions` | Done | `void` | `DevicePermission[]` | `id -> id`, `status -> status` |
@@ -31,6 +47,9 @@ This document tracks the status of real API integrations across the Coolzo Admin
 | Audit Export | N/A | Done | `void` | `CSV File` | Simulation triggered via button |
 | CMS Control | `GET /api/v1/governance/cms/content` | Done | `type?` | `CMSContent[]` | `title -> title`, `type -> type` |
 | CMS Delete | `DELETE /api/v1/governance/cms/{id}` | Done | `void` | `void` | Inline trash button |
+
+Batch 2 verification note:
+- 2026-04-19: Phase 2 RBAC/navigation was re-verified end to end against the live ASP.NET Core API and actual Vite/React admin-mobile client. Added backend module/action permission matrices to `/auth/me/permissions` and `/roles/{id}/permissions` while preserving raw `permissions[]`, fixed role permission replacement to avoid duplicate role-permission key failures, added `POST /api/v1/admin/view-as-role` with audit logging, wired client RBAC cache/foreground refresh/navigation filtering to the live `modules` contract, added Super Admin view-as-role UI with an orange persistent banner and `X-Coolzo-View-As-Role` request header, redirected denied routes to `/unauthorized`, and added `e2e/tests/rbac.spec.js`. Verification passed: `dotnet build`, `npm run build`, `npm run test:rbac` (5/5), and `npm run test:auth` (8/8).
 
 ## Batch 3: Admin - User & Role Management
 | Screen Name | API Endpoint | Status | Request Structure | Response Structure | Fields Mapping |
@@ -181,11 +200,14 @@ This document tracks the status of real API integrations across the Coolzo Admin
 ## Batch 18: Support & Feedback
 | Screen Name | API Endpoint | Status | Request Structure | Response Structure | Fields Mapping |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Support Dashboard | `GET /api/v1/support/stats` | Done | `void` | `SupportStats` | `openTickets -> openCount`, `avgResolutionTime -> resolutionTime`, `slaComplianceRate -> slaRate` |
-| Support Ticket Queue | `GET /api/v1/support/tickets` | Done | `filters` | `SupportTicket[]` | `id -> id`, `ticketNumber -> ref`, `subject -> subject`, `status -> status`, `priority -> priority` |
-| Ticket Detail | `GET /api/v1/support/tickets/{id}` | Done | `void` | `SupportTicket` | `id -> id`, `messages -> messages`, `messages[].senderName -> sender`, `messages[].text -> text` |
-| Feedback List | `GET /api/v1/support/feedback` | Done | `filters` | `Feedback[]` | `id -> id`, `srNumber -> srNum`, `technicianName -> techName`, `rating -> rating`, `status -> status` |
-| Feedback Detail | `GET /api/v1/support/feedback/{id}` | Done | `void` | `Feedback` | `id -> id`, `subRatings -> metricRatings`, `reviewText -> review`, `adminResponse -> response` |
+| Support Dashboard | `GET /api/v1/analytics/support` | Done | `dateFrom?, dateTo?, trendBy?, status?` | `ApiResponse<SupportAnalyticsResponse>` | `openTickets -> openTickets`, `averageResolutionHours -> avgResolutionTime`, `escalationCount -> escalatedCount` |
+| Support Ticket Queue | `GET /api/v1/support-tickets` | Done | `ticketNumber?, customerMobile?, categoryId?, priorityId?, status?, pageNumber, pageSize` | `ApiResponse<PagedResult<SupportTicketListItemResponse>>` | `supportTicketId -> id`, `ticketNumber -> ticketNumber`, `categoryName -> category`, `priorityName -> priority`, `status -> status` |
+| Create Ticket | `POST /api/v1/support-tickets` | Done | `{ customerId, subject, categoryId, priorityId, description, links: [] }` | `ApiResponse<SupportTicketDetailResponse>` | `supportTicketId -> id`, `subject -> subject`, `description -> opening message` |
+| Ticket Detail | `GET /api/v1/support-tickets/{id}` | Done | `supportTicketId` | `ApiResponse<SupportTicketDetailResponse>` | `replies -> messages`, `assignedOwnerName -> assignedAgentName`, `links.ServiceRequest -> linkedSrNumber` |
+| Ticket Reply | `POST /api/v1/support-tickets/{id}/replies` | Done | `{ replyText, isInternalOnly }` | `ApiResponse<SupportTicketReplyResponse>` | `replyText -> text`, `isInternalOnly -> isInternal` |
+| Ticket Status | `POST /api/v1/support-tickets/{id}/change-status` | Done | `{ status, remarks }` | `ApiResponse<SupportTicketDetailResponse>` | `open/in_progress/resolved/closed -> Open/InProgress/Resolved/Closed` |
+| Feedback List | `GET /api/v1/customer-reviews` | Done | `serviceId?` | `ApiResponse<CustomerReviewResponse[]>` | `customerReviewId -> id`, `userName -> customerName`, `comment -> reviewText`, `rating -> rating` |
+| Feedback Detail | `GET /api/v1/customer-reviews` | Done | `serviceId?` | `ApiResponse<CustomerReviewResponse[]>` | Client filters by `customerReviewId`; admin response remains unsupported by current backend schema |
 
 ## Batch 19: Governance & CMS
 | Screen Name | API Endpoint | Status | Request Structure | Response Structure | Fields Mapping |

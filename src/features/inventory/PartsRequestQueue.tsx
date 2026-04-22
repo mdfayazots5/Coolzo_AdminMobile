@@ -28,13 +28,14 @@ export default function PartsRequestQueue() {
   const navigate = useNavigate();
   const [requests, setRequests] = React.useState<PartsRequest[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [filter, setFilter] = React.useState<'all' | 'pending' | 'approved' | 'rejected' | 'partially_approved'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchRequests = async () => {
       try {
         const data = await inventoryRepository.getPartsRequests({});
-        setRequests(data);
+        setRequests(sortRequests(data));
       } catch (error) {
         console.error(error);
       } finally {
@@ -44,7 +45,12 @@ export default function PartsRequestQueue() {
     fetchRequests();
   }, [])
 
-  const filteredRequests = requests.filter(r => filter === 'all' || r.status === filter);
+  const filteredRequests = requests.filter((request) => {
+    const matchesFilter = filter === 'all' || request.status === filter;
+    const matchesSearch = [request.technicianName, request.srNumber]
+      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -64,12 +70,15 @@ export default function PartsRequestQueue() {
             type="text" 
             placeholder="Search by Technician or SR #..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
           <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="All Requests" />
           <FilterButton active={filter === 'pending'} onClick={() => setFilter('pending')} label="Pending" />
           <FilterButton active={filter === 'approved'} onClick={() => setFilter('approved')} label="Approved" />
+          <FilterButton active={filter === 'partially_approved'} onClick={() => setFilter('partially_approved')} label="Partial" />
         </div>
       </div>
 
@@ -93,6 +102,18 @@ export default function PartsRequestQueue() {
       </div>
     </div>
   )
+}
+
+function sortRequests(requests: PartsRequest[]) {
+  return [...requests].sort((left, right) => {
+    if (left.urgency === 'emergency' && right.urgency !== 'emergency') {
+      return -1;
+    }
+    if (right.urgency === 'emergency' && left.urgency !== 'emergency') {
+      return 1;
+    }
+    return new Date(left.submittedAt).getTime() - new Date(right.submittedAt).getTime();
+  });
 }
 
 function FilterButton({ active, onClick, label }: any) {

@@ -16,17 +16,23 @@ interface PermissionMatrixWidgetProps {
 
 const MODULES = [
   'dashboard',
+  'operations',
   'service-requests',
   'scheduling',
   'jobs',
+  'attendance',
+  'amc',
+  'equipment',
   'inventory',
   'billing',
   'finance',
+  'support',
   'team',
   'customers',
   'marketing',
   'reports',
-  'settings'
+  'settings',
+  'profile'
 ];
 
 const ACTIONS: PermissionAction[] = ['view', 'create', 'edit', 'delete', 'approve', 'export'];
@@ -80,6 +86,7 @@ export function PermissionMatrixWidget({ permissions, onChange, isReadOnly = fal
                       type="button"
                       disabled={isReadOnly}
                       onClick={() => togglePermission(module, action)}
+                      aria-label={`${module} ${action}`}
                       className={cn(
                         "size-8 rounded-lg flex items-center justify-center mx-auto transition-all",
                         hasPermission 

@@ -10,9 +10,7 @@ import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { inventoryRepository, Part, StockStatus } from "@/core/network/inventory-repository"
 import { 
   Search, 
-  Filter, 
   Plus, 
-  ChevronRight, 
   Package, 
   Download,
   AlertTriangle,
@@ -26,7 +24,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 
 export default function PartsCatalogList() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const initialStatus = searchParams.get('status') as StockStatus | 'all' || 'all';
 
   const [parts, setParts] = React.useState<Part[]>([])
@@ -66,7 +64,7 @@ export default function PartsCatalogList() {
         </div>
         <div className="flex gap-2">
           <AdminButton variant="outline" icon={<Download size={18} />}>Export CSV</AdminButton>
-          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/add')}>Add New Part</AdminButton>
+          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/catalog')}>Add New Part</AdminButton>
         </div>
       </div>
 

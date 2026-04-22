@@ -3,168 +3,235 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as React from "react"
-import { motion } from "motion/react"
-import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { serviceRequestRepository, ServiceRequest } from "@/core/network/service-request-repository"
-import { useAuthStore } from "@/store/auth-store"
-import { 
-  ClipboardList, 
-  MapPin, 
-  Clock, 
-  ChevronRight,
-  Filter,
-  Search,
-  ChevronLeft,
-  User
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useNavigate } from "react-router-dom"
-import { toast } from "sonner"
+import * as React from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeft, ClipboardList, MapPin, Search, UserCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import { AdminCard } from "@/components/shared/Cards";
+import { AdminButton } from "@/components/shared/AdminButton";
+import { InlineLoader } from "@/components/shared/Layout";
+import {
+  FieldJobListItem,
+  HelperJobView,
+  fieldWorkflowRepository,
+} from "@/core/network/field-workflow-repository";
+import { UserRole, useAuthStore } from "@/store/auth-store";
+import { cn } from "@/lib/utils";
+
+type JobTab = "today" | "history";
 
 export default function MyJobsList() {
-  const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [jobs, setJobs] = React.useState<ServiceRequest[]>([])
-  const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<'today' | 'upcoming' | 'history'>('today')
+  const { user } = useAuthStore();
+  const isHelper = user?.role === UserRole.HELPER;
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [tab, setTab] = React.useState<JobTab>("today");
+  const [query, setQuery] = React.useState("");
+  const [todayJobs, setTodayJobs] = React.useState<FieldJobListItem[]>([]);
+  const [historyJobs, setHistoryJobs] = React.useState<FieldJobListItem[]>([]);
+  const [helperJob, setHelperJob] = React.useState<HelperJobView | null>(null);
 
   React.useEffect(() => {
-    const fetchJobs = async () => {
-      if (!user?.id) return;
+    const load = async () => {
+      setIsLoading(true);
       try {
-        const myJobs = await serviceRequestRepository.getTechnicianJobs(user.id);
-        setJobs(myJobs);
+        if (isHelper) {
+          setHelperJob(await fieldWorkflowRepository.getHelperJobView());
+        } else {
+          const [myJobs, jobHistory] = await Promise.all([
+            fieldWorkflowRepository.getMyJobs(),
+            fieldWorkflowRepository.getJobHistory(),
+          ]);
+          setTodayJobs(myJobs);
+          setHistoryJobs(jobHistory);
+        }
       } catch (error) {
         console.error(error);
+        toast.error("Unable to load the field queue.");
       } finally {
         setIsLoading(false);
       }
-    }
-    fetchJobs();
-  }, [user?.id])
+    };
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
+    void load();
+  }, [isHelper]);
+
+  if (isLoading) {
+    return <InlineLoader className="h-screen" />;
+  }
+
+  if (isHelper) {
+    return (
+      <HelperAssignmentList
+        helperJob={helperJob}
+        onBack={() => navigate(-1)}
+        onOpen={(serviceRequestId) => navigate(`/field/helper/job/${serviceRequestId}`)}
+      />
+    );
+  }
+
+  const source = tab === "today" ? todayJobs : historyJobs;
+  const filteredJobs = source.filter((job) => {
+    const lookup = `${job.serviceRequestNumber} ${job.customerName} ${job.serviceName}`.toLowerCase();
+    return lookup.includes(query.trim().toLowerCase());
+  });
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-brand-navy/5 rounded-xl transition-colors">
+      <div className="flex items-center gap-3">
+        <button
+          className="rounded-xl p-2 transition hover:bg-brand-navy/5"
+          onClick={() => navigate(-1)}
+        >
           <ChevronLeft size={20} className="text-brand-navy" />
         </button>
-        <h1 className="text-xl font-bold text-brand-navy">My Job Queue</h1>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex p-1 bg-brand-navy/5 rounded-2xl">
-        <TabButton active={filter === 'today'} onClick={() => setFilter('today')} label="Today" />
-        <TabButton active={filter === 'upcoming'} onClick={() => setFilter('upcoming')} label="Upcoming" />
-        <TabButton active={filter === 'history'} onClick={() => setFilter('history')} label="History" />
-      </div>
-
-      {/* Search & Filter */}
-      <div className="flex gap-3">
-        <div className="flex-1 relative">
-          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
-          <input 
-            type="text" 
-            placeholder="Search SR#, Customer..."
-            className="w-full bg-white border border-border rounded-2xl pl-10 pr-4 py-3 text-sm focus:ring-1 focus:ring-brand-gold outline-none"
-          />
-        </div>
-        <button 
-          onClick={() => toast.info("Filter Jobs", { description: "Filter by status, priority or date range." })}
-          className="p-3 bg-white border border-border rounded-2xl text-brand-navy"
-        >
-          <Filter size={20} />
-        </button>
-      </div>
-
-      {/* Jobs List */}
-      <div className="space-y-4">
-        {jobs.map((job, idx) => (
-          <motion.div
-            key={job.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.05 }}
-          >
-            <JobCard job={job} onClick={() => navigate(`/field/job/${job.id}`)} />
-          </motion.div>
-        ))}
-        {jobs.length === 0 && (
-          <div className="text-center py-12">
-            <ClipboardList size={48} className="mx-auto text-brand-muted mb-4 opacity-20" />
-            <p className="text-brand-muted">No jobs found in this category.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function TabButton({ active, onClick, label }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={cn(
-        "flex-1 py-2.5 text-xs font-bold uppercase tracking-widest rounded-xl transition-all",
-        active ? "bg-white text-brand-navy shadow-sm" : "text-brand-muted"
-      )}
-    >
-      {label}
-    </button>
-  )
-}
-
-function JobCard({ job, onClick }: { job: ServiceRequest, onClick: () => void }) {
-  return (
-    <AdminCard 
-      onClick={onClick}
-      className={cn(
-        "p-5 border-l-4 cursor-pointer hover:shadow-lg transition-all",
-        job.priority === 'emergency' ? "border-l-status-emergency" : 
-        job.priority === 'urgent' ? "border-l-status-pending" : "border-l-brand-gold"
-      )}
-    >
-      <div className="flex justify-between items-start mb-3">
         <div>
-          <span className="text-[10px] font-bold text-brand-muted uppercase tracking-widest block mb-1">
-            {job.scheduling.requestedSlot}
-          </span>
-          <h4 className="text-sm font-bold text-brand-navy">{job.srNumber}</h4>
-        </div>
-        <span className={cn(
-          "px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest",
-          job.status === 'completed' ? "bg-status-completed/10 text-status-completed" :
-          job.status === 'in-progress' ? "bg-status-pending/10 text-status-pending" : "bg-brand-navy/5 text-brand-navy"
-        )}>
-          {job.status}
-        </span>
-      </div>
-      
-      <div className="space-y-2 mb-4">
-        <div className="flex items-center gap-2 text-xs text-brand-navy font-bold">
-          <User size={14} className="text-brand-muted" />
-          <span>{job.customer.name}</span>
-        </div>
-        <div className="flex items-start gap-2 text-[11px] text-brand-muted">
-          <MapPin size={14} className="shrink-0 mt-0.5" />
-          <span className="line-clamp-1">{job.location.address}</span>
+          <h1 className="text-xl font-bold text-brand-navy">My field jobs</h1>
+          <p className="text-sm text-brand-muted">Phase 10 live queue backed by `/api/v1/field`.</p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-border">
-        <div className="flex items-center gap-2">
-          <div className="size-6 bg-brand-navy/5 rounded-lg flex items-center justify-center text-brand-navy">
-            <Clock size={12} />
-          </div>
-          <span className="text-[10px] font-bold text-brand-navy uppercase tracking-widest">Est. {job.scheduling.estimatedDuration || 90}m</span>
+      <div className="grid gap-4 md:grid-cols-[auto_1fr_auto]">
+        <div className="inline-flex rounded-2xl bg-brand-navy/5 p-1">
+          <TabButton active={tab === "today"} label="Today" onClick={() => setTab("today")} />
+          <TabButton active={tab === "history"} label="History" onClick={() => setTab("history")} />
         </div>
-        <ChevronRight size={16} className="text-brand-gold" />
+        <label className="relative block">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
+          <input
+            className="w-full rounded-2xl border border-border bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-brand-gold/40"
+            placeholder="Search SR number, customer, service"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <AdminButton variant="secondary" onClick={() => navigate("/technician/home")}>
+          Dashboard
+        </AdminButton>
       </div>
-    </AdminCard>
-  )
+
+      {filteredJobs.length === 0 ? (
+        <AdminCard className="rounded-[32px] border-dashed p-8 text-center">
+          <ClipboardList size={30} className="mx-auto mb-3 text-brand-muted" />
+          <h2 className="text-base font-bold text-brand-navy">No jobs in this view.</h2>
+          <p className="mt-2 text-sm text-brand-muted">
+            {tab === "today"
+              ? "Dispatch has not assigned any live jobs to this queue yet."
+              : "Completed field jobs will appear here after submission for closure."}
+          </p>
+        </AdminCard>
+      ) : (
+        <div className="space-y-3">
+          {filteredJobs.map((job) => (
+            <button
+              key={job.id}
+              className="w-full rounded-[28px] border border-border bg-white p-5 text-left transition hover:border-brand-gold/40"
+              onClick={() => navigate(`/field/job/${job.id}`)}
+            >
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-base font-bold text-brand-navy">{job.customerName}</h3>
+                    <span className={badgeClass(job.status)}>{job.currentStatus}</span>
+                  </div>
+                  <p className="text-sm text-brand-muted">
+                    {job.serviceRequestNumber} • {job.serviceName}
+                  </p>
+                </div>
+                <div className="space-y-2 text-sm text-brand-navy/75 md:text-right">
+                  <p className="font-semibold">{job.slotLabel}</p>
+                  <div className="flex items-start gap-2 md:justify-end">
+                    <MapPin size={14} className="mt-0.5 text-brand-gold" />
+                    <span className="max-w-md">{job.addressSummary}</span>
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HelperAssignmentList(props: {
+  helperJob: HelperJobView | null;
+  onBack: () => void;
+  onOpen: (serviceRequestId: string) => void;
+}) {
+  return (
+    <div className="space-y-6 pb-24">
+      <div className="flex items-center gap-3">
+        <button className="rounded-xl p-2 transition hover:bg-brand-navy/5" onClick={props.onBack}>
+          <ChevronLeft size={20} className="text-brand-navy" />
+        </button>
+        <div>
+          <h1 className="text-xl font-bold text-brand-navy">Helper assignments</h1>
+          <p className="text-sm text-brand-muted">Simplified job list with helper-only task visibility.</p>
+        </div>
+      </div>
+
+      {props.helperJob?.serviceRequestId ? (
+        <AdminCard className="rounded-[32px] border p-6">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-brand-muted">
+                <UserCircle2 size={16} className="text-brand-gold" />
+                <span>{props.helperJob.technicianName || "Assigned technician"}</span>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-brand-navy">{props.helperJob.serviceRequestNumber}</h2>
+                <p className="text-sm text-brand-navy/70">{props.helperJob.serviceName}</p>
+              </div>
+              <div className="flex items-start gap-2 text-sm text-brand-navy/80">
+                <MapPin size={14} className="mt-0.5 text-brand-gold" />
+                <span>{props.helperJob.addressSummary}</span>
+              </div>
+              <p className="text-sm text-brand-muted">{props.helperJob.assignmentRemarks}</p>
+            </div>
+            <div className="space-y-3">
+              <p className={cn("text-xs font-bold uppercase tracking-[0.24em]", "text-brand-muted")}>
+                {props.helperJob.assignmentStatus}
+              </p>
+              <AdminButton onClick={() => props.onOpen(props.helperJob!.serviceRequestId!)}>Open Helper View</AdminButton>
+            </div>
+          </div>
+        </AdminCard>
+      ) : (
+        <AdminCard className="rounded-[32px] border-dashed p-8 text-center">
+          <ClipboardList size={30} className="mx-auto mb-3 text-brand-muted" />
+          <h2 className="text-base font-bold text-brand-navy">No helper assignment available.</h2>
+          <p className="mt-2 text-sm text-brand-muted">
+            Once dispatch pairs the helper to a technician job, it will appear here.
+          </p>
+        </AdminCard>
+      )}
+    </div>
+  );
+}
+
+function TabButton(props: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      className={cn(
+        "rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] transition",
+        props.active ? "bg-white text-brand-navy shadow-sm" : "text-brand-muted",
+      )}
+      onClick={props.onClick}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+function badgeClass(status: FieldJobListItem["status"]) {
+  return cn(
+    "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
+    status === "completed" && "bg-status-completed/10 text-status-completed",
+    status === "in-progress" && "bg-status-pending/10 text-status-pending",
+    status === "arrived" && "bg-brand-gold/15 text-brand-navy",
+    status === "en-route" && "bg-brand-navy/10 text-brand-navy",
+    status === "assigned" && "bg-brand-gold/20 text-brand-navy",
+    status === "cancelled" && "bg-status-emergency/10 text-status-emergency",
+  );
 }

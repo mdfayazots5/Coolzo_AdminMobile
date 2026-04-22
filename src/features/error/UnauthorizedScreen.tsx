@@ -16,7 +16,7 @@ export default function UnauthorizedScreen() {
   return (
     <div className="min-h-screen bg-brand-white flex flex-col items-center justify-center p-6">
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
+        initial={false}
         animate={{ scale: 1, opacity: 1 }}
         className="w-full max-w-md"
       >

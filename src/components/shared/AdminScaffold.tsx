@@ -6,8 +6,12 @@
 import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "@/lib/utils"
-import { useAuthStore } from "@/store/auth-store"
+import { UserRole, useAuthStore } from "@/store/auth-store"
 import { NavigationConfig, NavItem } from "@/core/config/navigation-config"
+import { useRBAC } from "@/core/auth/RBACProvider"
+import { authRepository } from "@/core/network/auth-repository"
+import { roleRepository, Role } from "@/core/network/role-repository"
+import { useSystemUX } from "@/core/system/SystemUXProvider"
 import { useLocation, useNavigate, Link } from "react-router-dom"
 import { 
   Bell, 
@@ -18,35 +22,81 @@ import {
   User, 
   Settings, 
   ChevronRight,
-  X
+  X,
+  Eye,
+  ShieldAlert
 } from "lucide-react"
 import { AdminBottomSheet } from "@/components/shared/Pickers"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { RoleBadge } from "@/components/shared/Badges"
 
 export function AdminScaffold({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuthStore()
+  const { user, refreshToken, logout } = useAuthStore()
+  const { canView, effectiveRole, isViewingAsRole, viewAsRole, startViewAsRole, exitViewAsRole } = useRBAC()
+  const { isOnline, pendingSyncCount } = useSystemUX()
   const location = useLocation()
   const navigate = useNavigate()
   const [isProfileOpen, setIsProfileOpen] = React.useState(false)
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
-  const [isOnline, setIsOnline] = React.useState(navigator.onLine)
+  const [roles, setRoles] = React.useState<Role[]>([])
+  const [selectedRoleId, setSelectedRoleId] = React.useState("")
+  const [isLoadingRoles, setIsLoadingRoles] = React.useState(false)
+  const [viewAsError, setViewAsError] = React.useState("")
+  const [isStartingViewAs, setIsStartingViewAs] = React.useState(false)
 
   React.useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
+    if (!isProfileOpen || user?.role !== UserRole.SUPER_ADMIN || roles.length > 0 || isLoadingRoles) {
+      return
     }
-  }, [])
+
+    setIsLoadingRoles(true)
+    roleRepository.getRoles()
+      .then((data) => {
+        const availableRoles = data.filter((role) => role.name !== "Super Administrator" && role.name !== "Super Admin")
+        setRoles(availableRoles)
+        setSelectedRoleId((current) => current || availableRoles[0]?.id || "")
+      })
+      .catch((error) => {
+        console.error("Unable to load roles for view-as-role", error)
+        setViewAsError("Unable to load roles right now")
+      })
+      .finally(() => setIsLoadingRoles(false))
+  }, [isLoadingRoles, isProfileOpen, roles.length, user?.role])
 
   if (!user) return <>{children}</>
 
-  const navItems = NavigationConfig[user.role] || []
+  const activeRole = effectiveRole || user.role
+  const navItems = (NavigationConfig[activeRole] || []).filter((item) => canView(item.module))
+
+  const handleStartViewAsRole = async () => {
+    if (!selectedRoleId) return
+
+    setIsStartingViewAs(true)
+    setViewAsError("")
+
+    try {
+      await startViewAsRole(selectedRoleId)
+      setIsProfileOpen(false)
+    } catch (error) {
+      console.error("View-as-role failed", error)
+      setViewAsError("Unable to start view-as-role mode")
+    } finally {
+      setIsStartingViewAs(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      if (refreshToken) {
+        await authRepository.logout(refreshToken)
+      }
+    } catch (error) {
+      console.error("Remote logout failed", error)
+    } finally {
+      logout()
+    }
+  }
 
   return (
     <div className="min-h-screen bg-brand-white flex flex-col pb-20 md:pb-0 md:pl-20 lg:pl-64">
@@ -61,6 +111,26 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
           >
             <WifiOff size={12} />
             Offline Mode — Viewing Cached Data
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isViewingAsRole && viewAsRole && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-[#f97316] text-white text-[10px] font-bold uppercase tracking-widest py-2 flex items-center justify-center gap-3 sticky top-0 z-[60]"
+          >
+            <ShieldAlert size={14} />
+            Viewing as {viewAsRole.displayName}
+            <button
+              onClick={() => void exitViewAsRole()}
+              className="rounded-full bg-white/20 px-3 py-1 hover:bg-white/30 transition-colors"
+            >
+              Exit View
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -83,7 +153,9 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
           <div className="h-6 w-px bg-border mx-2 hidden md:block" />
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Branch</span>
-            <span className="text-xs font-bold text-brand-navy">Hyderabad Central</span>
+            <span className="text-xs font-bold text-brand-navy">
+              Hyderabad Central {pendingSyncCount > 0 ? `• ${pendingSyncCount} pending sync` : ""}
+            </span>
           </div>
         </div>
 
@@ -95,11 +167,15 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
             <Search size={20} />
           </button>
           <button 
-            onClick={() => navigate('/settings/master/notifications')}
+            onClick={() => navigate(pendingSyncCount > 0 ? '/system/sync' : '/settings/master/notifications')}
             className="p-2 hover:bg-brand-navy/5 rounded-full text-brand-navy transition-colors relative"
           >
             <Bell size={20} />
-            <span className="absolute top-1.5 right-1.5 size-2 bg-status-emergency rounded-full border-2 border-brand-surface" />
+            {pendingSyncCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 bg-status-emergency rounded-full border-2 border-brand-surface text-[8px] leading-[12px] text-white font-bold flex items-center justify-center">
+                {pendingSyncCount}
+              </span>
+            )}
           </button>
           <button 
             onClick={() => setIsProfileOpen(true)}
@@ -141,7 +217,7 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
 
       {/* Side Navigation (Desktop) */}
       <nav className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-20 lg:w-64 bg-brand-navy z-50 transition-all">
-        <SidebarContent navItems={navItems} logout={logout} location={location} />
+        <SidebarContent navItems={navItems} logout={handleLogout} location={location} />
       </nav>
 
       {/* Mobile Sidebar Drawer */}
@@ -174,7 +250,7 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
               <div className="flex-1 overflow-y-auto py-4">
                 <SidebarContent 
                   navItems={navItems} 
-                  logout={logout} 
+                  logout={handleLogout} 
                   location={location} 
                   onItemClick={() => setIsMobileMenuOpen(false)}
                   isMobile
@@ -203,6 +279,55 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
               <RoleBadge role={user.role} />
             </div>
           </div>
+
+          {user.role === UserRole.SUPER_ADMIN && (
+            <div className="space-y-3 rounded-2xl border border-orange-300/30 bg-orange-400/10 p-4">
+              <div className="flex items-center gap-2 text-orange-200">
+                <Eye size={16} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">View As Role</span>
+              </div>
+              <p className="text-xs text-white/60">
+                Starts a scoped UI permission session for navigation and route guards. Exit restores Super Admin access.
+              </p>
+              <div className="flex gap-2">
+                <select
+                  value={selectedRoleId}
+                  onChange={(event) => setSelectedRoleId(event.target.value)}
+                  disabled={isLoadingRoles || isStartingViewAs}
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-bold text-white outline-none"
+                >
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id} className="text-brand-navy">
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+                <AdminButton
+                  type="button"
+                  size="sm"
+                  onClick={handleStartViewAsRole}
+                  isLoading={isStartingViewAs}
+                  disabled={!selectedRoleId || isLoadingRoles}
+                  className="bg-orange-300 text-brand-navy hover:bg-orange-200"
+                >
+                  Start
+                </AdminButton>
+              </div>
+              {isViewingAsRole && (
+                <AdminButton
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                  onClick={() => void exitViewAsRole()}
+                  className="border-orange-300/40 text-orange-100 hover:bg-orange-300/10"
+                >
+                  Exit View-As Mode
+                </AdminButton>
+              )}
+              {viewAsError && <p className="text-[11px] font-medium text-orange-100">{viewAsError}</p>}
+            </div>
+          )}
 
           <div className="space-y-2">
             <button 
@@ -236,8 +361,8 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
           <AdminButton 
             variant="outline"
             fullWidth 
-            onClick={() => {
-              logout()
+            onClick={async () => {
+              await handleLogout()
               setIsProfileOpen(false)
             }}
             className="border-white/20 text-white hover:bg-status-emergency hover:border-status-emergency transition-all"

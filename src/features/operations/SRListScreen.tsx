@@ -11,7 +11,7 @@ import { FilterBar } from "@/components/shared/FilterBar"
 import { SRCard } from "@/components/shared/SRCard"
 import { serviceRequestRepository, ServiceRequest } from "@/core/network/service-request-repository"
 import { Plus, Search, Filter, LayoutGrid, List } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { toast } from "sonner"
 
@@ -20,12 +20,16 @@ export default function SRListScreen() {
   const [filteredSrs, setFilteredSrs] = React.useState<ServiceRequest[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
   React.useEffect(() => {
     const fetchSRs = async () => {
       try {
-        const data = await serviceRequestRepository.getSRs({});
+        const statusFilter = searchParams.get('status') || undefined
+        const data = await serviceRequestRepository.getSRs({
+          status: statusFilter,
+        });
         setSrs(data);
         setFilteredSrs(data);
       } catch (error) {
@@ -35,7 +39,7 @@ export default function SRListScreen() {
       }
     }
     fetchSRs();
-  }, [])
+  }, [searchParams])
 
   const handleSearch = (query: string) => {
     const lowerQuery = query.toLowerCase();

@@ -4,7 +4,6 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { inventoryRepository } from "@/core/network/inventory-repository"
@@ -19,8 +18,6 @@ import {
   ArrowDownRight,
   Plus,
   RefreshCw,
-  Search,
-  ChevronRight,
   FileText
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
@@ -30,13 +27,18 @@ import { useNavigate } from "react-router-dom"
 export default function InventoryDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = React.useState<any>(null)
+  const [lowStockAlerts, setLowStockAlerts] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await inventoryRepository.getInventoryStats();
+        const [data, alerts] = await Promise.all([
+          inventoryRepository.getInventoryStats(),
+          inventoryRepository.getLowStockAlerts(),
+        ]);
         setStats(data);
+        setLowStockAlerts(alerts.slice(0, 3));
       } catch (error) {
         console.error(error);
       } finally {
@@ -94,10 +96,10 @@ export default function InventoryDashboard() {
           color="purple"
         />
         <ActionTile 
-          title="Stock Ledger" 
-          desc="View all chronological stock movements"
+          title="Supplier Management" 
+          desc="Maintain supplier contacts and lead times"
           icon={<FileText size={24} />}
-          onClick={() => navigate('/inventory/ledger')}
+          onClick={() => navigate('/inventory/suppliers')}
           color="green"
         />
       </div>
@@ -142,25 +144,21 @@ export default function InventoryDashboard() {
             <button className="text-xs font-bold text-brand-gold uppercase tracking-widest hover:underline" onClick={() => navigate('/inventory/catalog?status=low')}>View All</button>
           </div>
           <div className="space-y-4">
-            {[
-              { name: 'R410A Gas', stock: 5, min: 15 },
-              { name: 'Flare Nut 1/2"', stock: 12, min: 50 },
-              { name: 'Blower Motor', stock: 0, min: 2 },
-            ].map((item, i) => (
-              <div key={i} className="p-4 bg-white border border-border rounded-2xl hover:border-brand-gold transition-all group cursor-pointer">
+            {lowStockAlerts.map((item) => (
+              <div key={item.id} className="p-4 bg-white border border-border rounded-2xl hover:border-brand-gold transition-all group cursor-pointer">
                 <div className="flex justify-between items-start mb-2">
                   <p className="text-sm font-bold text-brand-navy">{item.name}</p>
                   <span className={cn(
                     "px-2 py-0.5 rounded-full text-[8px] font-bold uppercase",
-                    item.stock === 0 ? "bg-status-emergency/10 text-status-emergency" : "bg-status-pending/10 text-status-pending"
+                    item.stockQuantity === 0 ? "bg-status-emergency/10 text-status-emergency" : "bg-status-pending/10 text-status-pending"
                   )}>
-                    {item.stock === 0 ? 'Out of Stock' : 'Low Stock'}
+                    {item.stockQuantity === 0 ? 'Out of Stock' : 'Low Stock'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-brand-navy">{item.stock}</span>
-                    <span className="text-[10px] text-brand-muted uppercase tracking-widest">/ {item.min} min</span>
+                    <span className="text-xs font-bold text-brand-navy">{item.stockQuantity}</span>
+                    <span className="text-[10px] text-brand-muted uppercase tracking-widest">/ {item.minReorderLevel} min</span>
                   </div>
                   <AdminButton 
                     size="sm" 
@@ -177,7 +175,7 @@ export default function InventoryDashboard() {
               </div>
             ))}
           </div>
-          <AdminButton className="w-full mt-8" onClick={() => navigate('/inventory/orders/new')}>
+          <AdminButton className="w-full mt-8" onClick={() => navigate('/inventory/orders')}>
             Create Bulk PO
           </AdminButton>
         </AdminCard>

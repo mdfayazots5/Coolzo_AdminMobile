@@ -4,211 +4,313 @@
  */
 
 import * as React from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { toast } from "sonner"
+import {
+  AlertCircle,
+  ChevronLeft,
+  Clock3,
+  CreditCard,
+  Download,
+  FileText,
+  History,
+  Mail,
+  Pencil,
+  Plus,
+  Send,
+  ShieldAlert,
+  User,
+} from "lucide-react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { invoiceRepository, Invoice, InvoiceStatus, PaymentMethod } from "@/core/network/invoice-repository"
-import { 
-  ChevronLeft, 
-  Download, 
-  Send, 
-  Printer, 
-  CreditCard, 
-  User, 
-  Calendar, 
-  FileText,
-  Tag,
-  Plus,
-  History,
-  CheckCircle2,
-  AlertCircle,
-  MessageSquare,
-  Mail
-} from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
+import {
+  Invoice,
+  InvoiceStatus,
+  MarkInvoicePaidRequest,
+  ManualDiscountRequest,
+  PaymentMethod,
+  invoiceRepository,
+} from "@/core/network/invoice-repository"
 import { cn } from "@/lib/utils"
-import { useParams, useNavigate } from "react-router-dom"
-import { toast } from "sonner"
+
+type ModalState = "payment" | "discount" | "credit-note" | "edit" | null
 
 export default function InvoiceDetailScreen() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id } = useParams()
+  const navigate = useNavigate()
   const [invoice, setInvoice] = React.useState<Invoice | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false)
-  const [paymentAmount, setPaymentAmount] = React.useState(0)
-  const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod>('cash')
-  const [paymentRef, setPaymentRef] = React.useState("")
+  const [activeModal, setActiveModal] = React.useState<ModalState>(null)
+  const [paymentForm, setPaymentForm] = React.useState<MarkInvoicePaidRequest>({
+    amount: 0,
+    method: "cash",
+    reference: "",
+    notes: "",
+  })
+  const [discountForm, setDiscountForm] = React.useState<ManualDiscountRequest>({
+    code: "",
+    amount: 0,
+    reason: "",
+  })
+  const [creditNoteAmount, setCreditNoteAmount] = React.useState(0)
+  const [creditNoteReason, setCreditNoteReason] = React.useState("")
+  const [changeReason, setChangeReason] = React.useState("")
+  const [editableItems, setEditableItems] = React.useState<Invoice["items"]>([])
 
-  React.useEffect(() => {
-    const fetchInvoice = async () => {
-      if (!id) return;
-      try {
-        const data = await invoiceRepository.getInvoiceById(id);
-        if (data) {
-          setInvoice(data);
-          setPaymentAmount(data.balanceDue);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
+  const loadInvoice = React.useCallback(async () => {
+    if (!id) {
+      return
     }
-    fetchInvoice();
+
+    setIsLoading(true)
+    try {
+      const data = await invoiceRepository.getInvoiceById(id)
+      setInvoice(data)
+      setEditableItems(data?.items ?? [])
+      setPaymentForm((current) => ({
+        ...current,
+        amount: data?.balanceDue ?? 0,
+      }))
+    } catch (error) {
+      console.error(error)
+      toast.error("Unable to load invoice")
+    } finally {
+      setIsLoading(false)
+    }
   }, [id])
 
-  const handleRecordPayment = async () => {
-    if (!invoice || paymentAmount <= 0) return;
+  React.useEffect(() => {
+    void loadInvoice()
+  }, [loadInvoice])
+
+  const handleSendInvoice = async () => {
+    if (!invoice) {
+      return
+    }
+
     try {
-      const updated = await invoiceRepository.recordPayment(invoice.id, {
-        amount: paymentAmount,
-        method: paymentMethod,
-        reference: paymentRef
-      });
-      setInvoice(updated);
-      setIsPaymentModalOpen(false);
-      toast.success("Payment recorded successfully");
+      const updated = await invoiceRepository.sendInvoice(invoice.id)
+      setInvoice(updated)
+      toast.success("Invoice sent to customer")
     } catch (error) {
-      toast.error("Failed to record payment");
+      toast.error("Unable to send invoice")
     }
   }
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
-  if (!invoice) return <div className="p-8 text-center">Invoice not found</div>;
+  const handleRecordPayment = async () => {
+    if (!invoice) {
+      return
+    }
+
+    try {
+      const updated = await invoiceRepository.markAsPaid(invoice.id, paymentForm)
+      setInvoice(updated)
+      setActiveModal(null)
+      toast.success("Payment recorded")
+    } catch (error) {
+      toast.error("Unable to record payment")
+    }
+  }
+
+  const handleApplyDiscount = async () => {
+    if (!invoice) {
+      return
+    }
+
+    try {
+      const updated = await invoiceRepository.applyDiscount(invoice.id, discountForm)
+      setInvoice(updated)
+      setActiveModal(null)
+      toast.success("Discount applied")
+    } catch (error) {
+      toast.error("Unable to apply discount")
+    }
+  }
+
+  const handleIssueCreditNote = async () => {
+    if (!invoice) {
+      return
+    }
+
+    try {
+      const updated = await invoiceRepository.issueCreditNote(invoice.id, {
+        amount: creditNoteAmount,
+        reason: creditNoteReason,
+      })
+      setInvoice(updated)
+      setActiveModal(null)
+      toast.success("Credit note issued")
+    } catch (error) {
+      toast.error("Unable to issue credit note")
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!invoice || !changeReason.trim()) {
+      toast.error("Change reason is required")
+      return
+    }
+
+    const subtotal = editableItems.reduce((sum, item) => sum + item.total, 0)
+    const netPayable = subtotal - invoice.discountTotal + invoice.taxTotal
+
+    try {
+      const updated = await invoiceRepository.updateInvoice(
+        invoice.id,
+        {
+          items: editableItems,
+          subtotal,
+          netPayable,
+        },
+        changeReason,
+      )
+      setInvoice(updated)
+      setActiveModal(null)
+      toast.success("Invoice updated")
+    } catch (error) {
+      toast.error("Unable to update invoice")
+    }
+  }
+
+  const handleMarkBadDebt = async () => {
+    if (!invoice) {
+      return
+    }
+
+    try {
+      const updated = await invoiceRepository.markBadDebt(invoice.id)
+      setInvoice(updated)
+      toast.success("Invoice marked as bad debt")
+    } catch (error) {
+      toast.error("Unable to mark bad debt")
+    }
+  }
+
+  if (isLoading) {
+    return <InlineLoader className="h-screen" />
+  }
+
+  if (!invoice) {
+    return <div className="p-8 text-center">Invoice not found</div>
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-brand-navy/5 rounded-xl transition-colors">
+          <button onClick={() => navigate(-1)} className="rounded-xl p-2 transition-colors hover:bg-brand-navy/5">
             <ChevronLeft size={20} className="text-brand-navy" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-brand-navy">{invoice.invoiceNumber}</h1>
-            <p className="text-sm text-brand-muted">Issued on {new Date(invoice.issueDate).toLocaleDateString()}</p>
+            <p className="text-sm text-brand-muted">Service request {invoice.srNumber}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
-            <Printer size={20} />
+        <div className="flex flex-wrap gap-2">
+          <button className="rounded-2xl border border-border bg-white p-3 text-brand-navy transition-all hover:border-brand-gold">
+            <Download size={18} />
           </button>
-          <button className="p-3 bg-white border border-border rounded-2xl text-brand-navy hover:border-brand-gold transition-all">
-            <Download size={20} />
-          </button>
-          <AdminButton variant="outline" icon={<Send size={18} />}>Send Invoice</AdminButton>
-          {invoice.status !== 'paid' && (
-            <AdminButton icon={<Plus size={18} />} onClick={() => setIsPaymentModalOpen(true)}>Record Payment</AdminButton>
+          <AdminButton variant="outline" icon={<Send size={18} />} onClick={handleSendInvoice}>
+            Send
+          </AdminButton>
+          <AdminButton variant="outline" icon={<Pencil size={18} />} onClick={() => setActiveModal("edit")}>
+            Edit
+          </AdminButton>
+          {invoice.status !== "paid" && invoice.status !== "bad_debt" && (
+            <AdminButton icon={<Plus size={18} />} onClick={() => setActiveModal("payment")}>
+              Mark as Paid
+            </AdminButton>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Summary & Customer */}
-        <div className="lg:col-span-1 space-y-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="space-y-6">
           <AdminCard className="p-6">
             <SectionHeader title="Payment Status" icon={<CreditCard size={18} />} />
-            <div className="flex flex-col items-center py-6">
+            <div className="mt-6 flex flex-col items-center">
               <div className={cn(
-                "size-24 rounded-3xl flex flex-col items-center justify-center mb-4",
-                invoice.status === 'paid' ? "bg-status-completed/10 text-status-completed" : 
-                invoice.status === 'overdue' ? "bg-status-emergency/10 text-status-emergency" : "bg-brand-navy/5 text-brand-navy"
+                "flex size-24 flex-col items-center justify-center rounded-3xl",
+                invoice.status === "paid"
+                  ? "bg-status-completed/10 text-status-completed"
+                  : invoice.status === "overdue"
+                    ? "bg-status-emergency/10 text-status-emergency"
+                    : "bg-brand-navy/5 text-brand-navy",
               )}>
-                <span className="text-2xl font-bold">₹{(invoice.balanceDue / 1000).toFixed(1)}k</span>
+                <span className="text-2xl font-bold">₹{Math.ceil(invoice.balanceDue / 1000)}k</span>
                 <span className="text-[10px] font-bold uppercase tracking-widest">Balance</span>
               </div>
-              <StatusBadge status={invoice.status} />
+              <div className="mt-4">
+                <StatusBadge status={invoice.status} />
+              </div>
             </div>
-            <div className="space-y-4 border-t border-border pt-6">
+            <div className="mt-6 space-y-4 border-t border-border pt-6">
               <InfoRow label="Net Payable" value={`₹${invoice.netPayable.toLocaleString()}`} />
               <InfoRow label="Amount Paid" value={`₹${invoice.amountPaid.toLocaleString()}`} />
+              <InfoRow label="Balance" value={`₹${invoice.balanceDue.toLocaleString()}`} />
               <InfoRow label="Due Date" value={new Date(invoice.dueDate).toLocaleDateString()} />
             </div>
           </AdminCard>
 
           <AdminCard className="p-6">
-            <SectionHeader title="Customer Info" icon={<User size={18} />} />
+            <SectionHeader title="Customer" icon={<User size={18} />} />
             <div className="mt-4 space-y-3">
               <p className="text-sm font-bold text-brand-navy">{invoice.customerName}</p>
-              <p className="text-xs text-brand-muted uppercase tracking-widest">{invoice.customerType} Account</p>
-              <div className="flex gap-2 pt-2">
-                <button className="p-2 bg-brand-navy/5 rounded-lg text-brand-navy hover:bg-brand-navy/10 transition-colors">
+              <p className="text-[10px] uppercase tracking-widest text-brand-muted">{invoice.customerType} account</p>
+              <div className="flex gap-2">
+                <button className="rounded-lg bg-brand-navy/5 p-2 text-brand-navy transition-colors hover:bg-brand-navy/10">
                   <Mail size={16} />
-                </button>
-                <button className="p-2 bg-brand-navy/5 rounded-lg text-brand-navy hover:bg-brand-navy/10 transition-colors">
-                  <MessageSquare size={16} />
                 </button>
               </div>
             </div>
           </AdminCard>
 
           <AdminCard className="p-6">
-            <SectionHeader title="Service Context" icon={<FileText size={18} />} />
+            <SectionHeader title="Billing Actions" icon={<AlertCircle size={18} />} />
             <div className="mt-4 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">SR Number</span>
-                <span className="text-sm font-bold text-brand-navy">{invoice.srNumber}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">Technician</span>
-                <span className="text-sm font-bold text-brand-navy">{invoice.technicianName}</span>
-              </div>
+              <ActionButton label="Apply Discount" onClick={() => setActiveModal("discount")} />
+              <ActionButton label="Issue Credit Note" onClick={() => setActiveModal("credit-note")} />
+              <ActionButton label="Mark as Bad Debt" onClick={handleMarkBadDebt} tone="danger" />
             </div>
           </AdminCard>
         </div>
 
-        {/* Right Column: Line Items & History */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 xl:col-span-2">
           <AdminCard className="p-8">
-            <SectionHeader title="Invoice Line Items" icon={<FileText size={18} />} />
-            <div className="overflow-x-auto mt-6">
+            <SectionHeader title="Line Items" icon={<FileText size={18} />} />
+            <div className="mt-6 overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-left border-b border-border">
-                    <th className="pb-4 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Description</th>
-                    <th className="pb-4 text-[10px] font-bold text-brand-muted uppercase tracking-widest text-center">Qty</th>
-                    <th className="pb-4 text-[10px] font-bold text-brand-muted uppercase tracking-widest text-right">Unit Price</th>
-                    <th className="pb-4 text-[10px] font-bold text-brand-muted uppercase tracking-widest text-right">Total</th>
+                  <tr className="border-b border-border text-left">
+                    <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Description</th>
+                    <th className="pb-4 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Type</th>
+                    <th className="pb-4 text-right text-[10px] font-bold uppercase tracking-widest text-brand-muted">Qty</th>
+                    <th className="pb-4 text-right text-[10px] font-bold uppercase tracking-widest text-brand-muted">Unit Price</th>
+                    <th className="pb-4 text-right text-[10px] font-bold uppercase tracking-widest text-brand-muted">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {invoice.items.map(item => (
+                  {invoice.items.map((item) => (
                     <tr key={item.id}>
-                      <td className="py-4">
-                        <span className="text-sm font-bold text-brand-navy">{item.description}</span>
-                        <p className="text-[10px] text-brand-muted uppercase tracking-widest">{item.type}</p>
-                      </td>
-                      <td className="py-4 text-center">
-                        <span className="text-sm text-brand-navy">{item.quantity}</span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <span className="text-sm text-brand-muted">₹{item.unitPrice.toLocaleString()}</span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <span className="text-sm font-bold text-brand-navy">₹{item.total.toLocaleString()}</span>
-                      </td>
+                      <td className="py-4 text-sm font-bold text-brand-navy">{item.description}</td>
+                      <td className="py-4 text-xs uppercase tracking-widest text-brand-muted">{item.type.replace("_", " ")}</td>
+                      <td className="py-4 text-right text-sm text-brand-navy">{item.quantity}</td>
+                      <td className="py-4 text-right text-sm text-brand-muted">₹{item.unitPrice.toLocaleString()}</td>
+                      <td className="py-4 text-right text-sm font-bold text-brand-navy">₹{item.total.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
             <div className="mt-8 flex justify-end">
               <div className="w-full max-w-xs space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">Subtotal</span>
-                  <span className="text-sm font-bold text-brand-navy">₹{invoice.subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center text-status-emergency">
-                  <span className="text-xs font-bold uppercase tracking-widest">Discount</span>
-                  <span className="text-sm font-bold">-₹{invoice.discountTotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">Tax (GST)</span>
-                  <span className="text-sm font-bold text-brand-navy">₹{invoice.taxTotal.toLocaleString()}</span>
-                </div>
-                <div className="h-px bg-border pt-2" />
-                <div className="flex justify-between items-center">
+                <InfoRow label="Subtotal" value={`₹${invoice.subtotal.toLocaleString()}`} />
+                <InfoRow label="Discount" value={`-₹${invoice.discountTotal.toLocaleString()}`} danger />
+                <InfoRow label="Tax" value={`₹${invoice.taxTotal.toLocaleString()}`} />
+                <div className="h-px bg-border" />
+                <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-brand-navy">Net Payable</span>
                   <span className="text-2xl font-bold text-brand-navy">₹{invoice.netPayable.toLocaleString()}</span>
                 </div>
@@ -216,116 +318,311 @@ export default function InvoiceDetailScreen() {
             </div>
           </AdminCard>
 
-          <AdminCard className="p-8">
-            <SectionHeader title="Payment History" icon={<History size={18} />} />
-            <div className="mt-6 space-y-4">
-              {invoice.paymentHistory.map((payment, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-brand-navy/5 rounded-2xl">
-                  <div className="flex items-center gap-4">
-                    <div className="size-10 bg-white rounded-xl flex items-center justify-center text-status-completed shadow-sm">
-                      <CheckCircle2 size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-brand-navy">₹{payment.amount.toLocaleString()} Received</p>
-                      <p className="text-[10px] text-brand-muted uppercase tracking-widest">
-                        via {payment.method.replace('_', ' ')} • Ref: {payment.reference}
-                      </p>
-                    </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <AdminCard className="p-8">
+              <SectionHeader title="Payments" icon={<Clock3 size={18} />} />
+              <div className="mt-6 space-y-4">
+                {invoice.paymentHistory.length === 0 && (
+                  <p className="py-6 text-center text-sm text-brand-muted">No payments recorded yet.</p>
+                )}
+                {invoice.paymentHistory.map((payment) => (
+                  <div key={payment.id} className="rounded-2xl bg-brand-navy/5 p-4">
+                    <p className="text-sm font-bold text-brand-navy">₹{payment.amount.toLocaleString()}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-brand-muted">
+                      {payment.method.replace("_", " ")} • {payment.reference}
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-widest text-brand-muted">
+                      {new Date(payment.date).toLocaleString()}
+                    </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-brand-navy">{new Date(payment.date).toLocaleDateString()}</p>
-                    <p className="text-[10px] text-brand-muted uppercase tracking-widest">{new Date(payment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                ))}
+              </div>
+            </AdminCard>
+
+            <AdminCard className="p-8">
+              <SectionHeader title="Version History" icon={<History size={18} />} />
+              <div className="mt-6 space-y-4">
+                {invoice.versionHistory.map((entry) => (
+                  <motion.div key={entry.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-border p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-xs font-bold uppercase tracking-widest text-brand-gold">v{entry.version}</span>
+                      <span className="text-[10px] uppercase tracking-widest text-brand-muted">{new Date(entry.changedAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="mt-2 text-sm font-bold text-brand-navy">{entry.changeReason}</p>
+                    <p className="mt-1 text-xs text-brand-muted">{entry.summary}</p>
+                    <p className="mt-2 text-[10px] uppercase tracking-widest text-brand-muted">By {entry.changedBy}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </AdminCard>
+          </div>
+
+          {invoice.creditNotes.length > 0 && (
+            <AdminCard className="p-8">
+              <SectionHeader title="Credit Notes" icon={<ShieldAlert size={18} />} />
+              <div className="mt-6 space-y-4">
+                {invoice.creditNotes.map((creditNote) => (
+                  <div key={creditNote.id} className="rounded-2xl border border-status-emergency/20 bg-status-emergency/5 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-brand-navy">₹{creditNote.amount.toLocaleString()}</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-status-emergency">{creditNote.status.replace("_", " ")}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-brand-muted">{creditNote.reason}</p>
                   </div>
-                </div>
-              ))}
-              {invoice.paymentHistory.length === 0 && (
-                <p className="text-center py-10 text-brand-muted italic">No payments recorded yet.</p>
-              )}
-            </div>
-          </AdminCard>
+                ))}
+              </div>
+            </AdminCard>
+          )}
         </div>
       </div>
 
-      {/* Payment Modal */}
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-[40px] p-8 w-full max-w-md shadow-2xl"
-          >
-            <h2 className="text-xl font-bold text-brand-navy mb-2">Record Payment</h2>
-            <p className="text-sm text-brand-muted mb-6">Manually record a payment for invoice {invoice.invoiceNumber}.</p>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Amount Received</label>
-                <input 
-                  type="number" 
-                  className="w-full px-4 py-3 bg-brand-navy/5 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-                />
-              </div>
+      {activeModal && (
+        <ModalFrame onClose={() => setActiveModal(null)}>
+          {activeModal === "payment" && (
+            <ModalSection
+              title="Record Payment"
+              actionLabel="Save Payment"
+              onAction={handleRecordPayment}
+              onCancel={() => setActiveModal(null)}
+            >
+              <NumberField label="Amount" value={paymentForm.amount} onChange={(value) => setPaymentForm((current) => ({ ...current, amount: value }))} />
+              <SelectField
+                label="Method"
+                value={paymentForm.method}
+                options={[
+                  { value: "cash", label: "Cash" },
+                  { value: "cheque", label: "Cheque" },
+                  { value: "bank_transfer", label: "Bank Transfer" },
+                  { value: "online", label: "Online" },
+                ]}
+                onChange={(value) => setPaymentForm((current) => ({ ...current, method: value as PaymentMethod }))}
+              />
+              <TextField label="Reference" value={paymentForm.reference} onChange={(value) => setPaymentForm((current) => ({ ...current, reference: value }))} />
+            </ModalSection>
+          )}
 
-              <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Payment Method</label>
-                <select 
-                  className="w-full px-4 py-3 bg-brand-navy/5 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                >
-                  <option value="cash">Cash</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="online">Online Gateway</option>
-                </select>
-              </div>
+          {activeModal === "discount" && (
+            <ModalSection
+              title="Apply Discount"
+              actionLabel="Apply Discount"
+              onAction={handleApplyDiscount}
+              onCancel={() => setActiveModal(null)}
+            >
+              <TextField label="Coupon Code" value={discountForm.code ?? ""} onChange={(value) => setDiscountForm((current) => ({ ...current, code: value }))} />
+              <NumberField label="Discount Amount" value={discountForm.amount ?? 0} onChange={(value) => setDiscountForm((current) => ({ ...current, amount: value }))} />
+              <TextField label="Reason" value={discountForm.reason} onChange={(value) => setDiscountForm((current) => ({ ...current, reason: value }))} />
+            </ModalSection>
+          )}
 
-              <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Reference Number</label>
-                <input 
-                  type="text" 
-                  placeholder="TXN ID, Cheque #, etc."
-                  className="w-full px-4 py-3 bg-brand-navy/5 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
-                  value={paymentRef}
-                  onChange={(e) => setPaymentRef(e.target.value)}
-                />
-              </div>
+          {activeModal === "credit-note" && (
+            <ModalSection
+              title="Issue Credit Note"
+              actionLabel="Create Credit Note"
+              onAction={handleIssueCreditNote}
+              onCancel={() => setActiveModal(null)}
+            >
+              <NumberField label="Credit Amount" value={creditNoteAmount} onChange={setCreditNoteAmount} />
+              <TextField label="Reason" value={creditNoteReason} onChange={setCreditNoteReason} />
+            </ModalSection>
+          )}
 
-              <div className="flex gap-3 pt-4">
-                <AdminButton variant="outline" className="flex-1" onClick={() => setIsPaymentModalOpen(false)}>Cancel</AdminButton>
-                <AdminButton className="flex-1" onClick={handleRecordPayment}>Record Payment</AdminButton>
+          {activeModal === "edit" && (
+            <ModalSection
+              title="Edit Invoice"
+              actionLabel="Save Changes"
+              onAction={handleSaveEdit}
+              onCancel={() => setActiveModal(null)}
+            >
+              <div className="space-y-3">
+                {editableItems.map((item) => (
+                  <div key={item.id} className="grid grid-cols-1 gap-3 rounded-2xl bg-brand-navy/5 p-4 lg:grid-cols-[1fr_96px_120px]">
+                    <TextField
+                      label="Description"
+                      value={item.description}
+                      onChange={(value) =>
+                        setEditableItems((current) =>
+                          current.map((entry) => (entry.id === item.id ? { ...entry, description: value } : entry)),
+                        )
+                      }
+                    />
+                    <NumberField
+                      label="Qty"
+                      value={item.quantity}
+                      onChange={(value) =>
+                        setEditableItems((current) =>
+                          current.map((entry) =>
+                            entry.id === item.id
+                              ? { ...entry, quantity: value, total: value * entry.unitPrice }
+                              : entry,
+                          ),
+                        )
+                      }
+                    />
+                    <NumberField
+                      label="Unit Price"
+                      value={item.unitPrice}
+                      onChange={(value) =>
+                        setEditableItems((current) =>
+                          current.map((entry) =>
+                            entry.id === item.id
+                              ? { ...entry, unitPrice: value, total: entry.quantity * value }
+                              : entry,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                ))}
               </div>
-            </div>
-          </motion.div>
-        </div>
+              <TextField label="Change Reason" value={changeReason} onChange={setChangeReason} />
+            </ModalSection>
+          )}
+        </ModalFrame>
       )}
     </div>
   )
 }
 
-function StatusBadge({ status }: { status: InvoiceStatus }) {
-  const statusMap: any = {
-    unpaid: { color: 'bg-brand-navy/5 text-brand-navy', text: 'Unpaid' },
-    partially_paid: { color: 'bg-brand-gold/10 text-brand-gold', text: 'Partial' },
-    paid: { color: 'bg-status-completed/10 text-status-completed', text: 'Paid' },
-    overdue: { color: 'bg-status-emergency/10 text-status-emergency', text: 'Overdue' },
-    cancelled: { color: 'bg-brand-muted/10 text-brand-muted', text: 'Cancelled' },
-  };
-  const config = statusMap[status];
+function ActionButton({ label, onClick, tone = "default" }: { label: string; onClick: () => void; tone?: "default" | "danger" }) {
   return (
-    <span className={cn("px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest", config.color)}>
-      {config.text}
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full rounded-2xl border px-4 py-3 text-left text-xs font-bold uppercase tracking-widest transition-all",
+        tone === "danger"
+          ? "border-status-emergency/20 bg-status-emergency/5 text-status-emergency hover:bg-status-emergency/10"
+          : "border-border bg-white text-brand-navy hover:border-brand-gold",
+      )}
+    >
+      {label}
+    </button>
+  )
+}
+
+function InfoRow({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-bold uppercase tracking-widest text-brand-muted">{label}</span>
+      <span className={cn("text-sm font-bold", danger ? "text-status-emergency" : "text-brand-navy")}>{value}</span>
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: InvoiceStatus }) {
+  const statusMap: Record<InvoiceStatus, { label: string; className: string }> = {
+    draft: { label: "Draft", className: "bg-brand-navy/5 text-brand-navy" },
+    sent: { label: "Sent", className: "bg-brand-gold/10 text-brand-gold" },
+    unpaid: { label: "Unpaid", className: "bg-brand-navy/5 text-brand-navy" },
+    partially_paid: { label: "Partial", className: "bg-brand-gold/10 text-brand-gold" },
+    paid: { label: "Paid", className: "bg-status-completed/10 text-status-completed" },
+    overdue: { label: "Overdue", className: "bg-status-emergency/10 text-status-emergency" },
+    cancelled: { label: "Cancelled", className: "bg-brand-muted/10 text-brand-muted" },
+    bad_debt: { label: "Bad Debt", className: "bg-brand-navy text-white" },
+  }
+
+  const config = statusMap[status]
+  return (
+    <span className={cn("rounded-full px-3 py-1 text-xs font-bold uppercase tracking-widest", config.className)}>
+      {config.label}
     </span>
   )
 }
 
-function InfoRow({ label, value }: { label: string, value: string }) {
+function ModalFrame({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="flex justify-between items-center">
-      <span className="text-xs text-brand-muted font-bold uppercase tracking-widest">{label}</span>
-      <span className="text-sm font-bold text-brand-navy">{value}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-[40px] bg-white p-8 shadow-2xl">
+        {children}
+        <button onClick={onClose} className="sr-only">
+          Close
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ModalSection({
+  title,
+  children,
+  actionLabel,
+  onAction,
+  onCancel,
+}: {
+  title: string
+  children: React.ReactNode
+  actionLabel: string
+  onAction: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-brand-navy">{title}</h2>
+      <div className="mt-6 space-y-4">{children}</div>
+      <div className="mt-6 flex gap-3">
+        <AdminButton variant="outline" className="flex-1" onClick={onCancel}>
+          Cancel
+        </AdminButton>
+        <AdminButton className="flex-1" onClick={onAction}>
+          {actionLabel}
+        </AdminButton>
+      </div>
+    </div>
+  )
+}
+
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div>
+      <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+      />
+    </div>
+  )
+}
+
+function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <div>
+      <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">{label}</label>
+      <input
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value) || 0)}
+        className="w-full rounded-2xl bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+      />
+    </div>
+  )
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: { value: string; label: string }[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <div>
+      <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">{label}</label>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

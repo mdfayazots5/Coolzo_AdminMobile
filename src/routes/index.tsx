@@ -4,7 +4,7 @@
  */
 
 import * as React from "react"
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useLocation, useParams } from 'react-router-dom';
 import { useAuthStore, AuthStatus } from '../store/auth-store';
 import SplashScreen from '../features/splash/SplashScreen';
 import LoginScreen from '../features/auth/LoginScreen';
@@ -19,6 +19,8 @@ import NotFoundScreen from '../features/error/NotFoundScreen';
 import RootErrorBoundary from '../features/error/RootErrorBoundary';
 import { AdminScaffold } from '../components/shared/AdminScaffold';
 import { RBACProvider, useRBAC } from '../core/auth/RBACProvider';
+import { logPermissionDeniedAttempt } from '../core/auth/permission-audit';
+import { resolveDefaultRoute } from '../core/auth/auth-session';
 import UserManagementListScreen from '../features/admin/UserManagementListScreen';
 import UserDetailScreen from '../features/admin/UserDetailScreen';
 import CreateUserScreen from '../features/admin/CreateUserScreen';
@@ -29,6 +31,8 @@ import BranchDetailScreen from '../features/admin/BranchDetailScreen';
 import CreateBranchScreen from '../features/admin/CreateBranchScreen';
 import SystemConfigHomeScreen from '../features/admin/SystemConfigHomeScreen';
 import ServiceCatalogScreen from '../features/admin/ServiceCatalogScreen';
+import ZoneManagementScreen from '../features/admin/ZoneManagementScreen';
+import BusinessHoursScreen from '../features/admin/BusinessHoursScreen';
 import PricingConfigScreen from '../features/admin/PricingConfigScreen';
 import WorkflowConfigScreen from '../features/admin/WorkflowConfigScreen';
 import TaxConfigScreen from '../features/admin/TaxConfigScreen';
@@ -40,6 +44,7 @@ import Customer360ViewScreen from '../features/customers/Customer360ViewScreen';
 import CreateCustomerScreen from '../features/customers/CreateCustomerScreen';
 import TechnicianListScreen from '../features/team/TechnicianListScreen';
 import TechnicianDetailScreen from '../features/team/TechnicianDetailScreen';
+import TechnicianEditorScreen from '../features/team/TechnicianEditorScreen';
 import TechnicianAvailabilityBoard from '../features/team/TechnicianAvailabilityBoard';
 import MyProfileScreen from '../features/team/MyProfileScreen';
 import DashboardScreen from '../features/dashboard/DashboardScreen';
@@ -79,16 +84,21 @@ import PartsRequestDetail from '../features/inventory/PartsRequestDetail';
 import StockMovementLedger from '../features/inventory/StockMovementLedger';
 import PurchaseOrderList from '../features/inventory/PurchaseOrderList';
 import PurchaseOrderDetail from '../features/inventory/PurchaseOrderDetail';
+import SupplierManagement from '../features/inventory/SupplierManagement';
 import InvoiceListScreen from '../features/billing/InvoiceListScreen';
 import InvoiceDetailScreen from '../features/billing/InvoiceDetailScreen';
 import ARDashboard from '../features/billing/ARDashboard';
 import CreateManualInvoice from '../features/billing/CreateManualInvoice';
 import FinanceDashboard from '../features/finance/FinanceDashboard';
 import PaymentListScreen from '../features/finance/PaymentListScreen';
+import PaymentDetailScreen from '../features/finance/PaymentDetailScreen';
+import ReceiptManagementScreen from '../features/finance/ReceiptManagementScreen';
+import FinanceReportScreen from '../features/finance/FinanceReportScreen';
 import TaxReport from '../features/finance/TaxReport';
 import SupportDashboard from '../features/support/SupportDashboard';
 import SupportTicketQueue from '../features/support/SupportTicketQueue';
 import TicketDetailScreen from '../features/support/TicketDetailScreen';
+import SupportTicketCreateScreen from '../features/support/SupportTicketCreateScreen';
 import FeedbackList from '../features/support/FeedbackList';
 import FeedbackDetail from '../features/support/FeedbackDetail';
 import NotificationTemplates from '../features/governance/NotificationTemplates';
@@ -100,6 +110,16 @@ import SystemHealthDashboard from '../features/system/SystemHealthDashboard';
 import PermissionsSettings from '../features/system/PermissionsSettings';
 import OfflineSyncQueue from '../features/system/OfflineSyncQueue';
 import { useEffect, useState } from 'react';
+import { authRepository } from '../core/network/auth-repository';
+import { LocalStorage, StorageKey } from '../core/storage/local-storage';
+import {
+  consumePendingRoute,
+  navigateToPath,
+  queuePendingRoute,
+  resolveDeepLinkPath,
+  resolvePushIntentPath,
+  PushNavigationIntent,
+} from '../core/system/navigation-intents';
 
 // Placeholder components for future phases
 const Placeholder = ({ title }: { title: string }) => (
@@ -112,7 +132,15 @@ const Placeholder = ({ title }: { title: string }) => (
 // Role Guard
 const RoleGuard = ({ module, children }: { module: string; children: React.ReactNode }) => {
   const { canView } = useRBAC();
-  if (!canView(module)) return <UnauthorizedScreen />;
+  const location = useLocation();
+  if (!canView(module)) {
+    logPermissionDeniedAttempt({
+      module,
+      action: 'view',
+      route: location.pathname,
+    });
+    return <Navigate to="/unauthorized" replace state={{ from: location.pathname, module }} />;
+  }
   return <>{children}</>;
 };
 
@@ -137,18 +165,33 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 
 // Guest Guard (for login page)
 const GuestGuard = ({ children }: { children: React.ReactNode }) => {
-  const { status, isInitialized } = useAuthStore();
+  const { status, isInitialized, user } = useAuthStore();
   
   if (!isInitialized) return <SplashScreen />;
-  if (status === AuthStatus.AUTHENTICATED) return <Navigate to="/dashboard" replace />;
+  if (status === AuthStatus.AUTHENTICATED) return <Navigate to={resolveDefaultRoute(user?.role)} replace />;
   
   return <>{children}</>;
+};
+
+const ParamRedirect = ({ resolve }: { resolve: (params: Record<string, string | undefined>) => string }) => {
+  const params = useParams();
+  return <Navigate to={resolve(params)} replace />;
 };
 
 const router = createBrowserRouter([
   {
     path: '/',
     element: <Navigate to="/dashboard" replace />,
+  },
+  {
+    path: '/admin/dashboard',
+    element: (
+      <AuthGuard>
+        <RoleGuard module="dashboard">
+          <DashboardScreen />
+        </RoleGuard>
+      </AuthGuard>
+    ),
   },
   {
     path: '/login',
@@ -183,6 +226,14 @@ const router = createBrowserRouter([
     element: <UpdatePromptScreen />,
   },
   {
+    path: '/unauthorized',
+    element: (
+      <AuthGuard>
+        <UnauthorizedScreen />
+      </AuthGuard>
+    ),
+  },
+  {
     path: '/dashboard',
     element: (
       <AuthGuard>
@@ -204,6 +255,7 @@ const router = createBrowserRouter([
   { path: '/scheduling', element: <AuthGuard><RoleGuard module="scheduling"><SchedulingBoardDayView /></RoleGuard></AuthGuard> },
   { path: '/scheduling/shifts', element: <AuthGuard><RoleGuard module="scheduling"><TechnicianShiftScheduler /></RoleGuard></AuthGuard> },
   { path: '/scheduling/amc', element: <AuthGuard><RoleGuard module="scheduling"><AMCAutoScheduleBoard /></RoleGuard></AuthGuard> },
+  { path: '/technician/home', element: <AuthGuard><RoleGuard module="jobs"><TechnicianHomeDashboard /></RoleGuard></AuthGuard> },
   { path: '/field/dashboard', element: <AuthGuard><RoleGuard module="jobs"><TechnicianHomeDashboard /></RoleGuard></AuthGuard> },
   { path: '/field/jobs', element: <AuthGuard><RoleGuard module="jobs"><MyJobsList /></RoleGuard></AuthGuard> },
   { path: '/field/job/:id', element: <AuthGuard><RoleGuard module="jobs"><JobWorkflowContainer /></RoleGuard></AuthGuard> },
@@ -238,6 +290,7 @@ const router = createBrowserRouter([
   { path: '/inventory/ledger', element: <AuthGuard><RoleGuard module="inventory"><StockMovementLedger /></RoleGuard></AuthGuard> },
   { path: '/inventory/orders', element: <AuthGuard><RoleGuard module="inventory"><PurchaseOrderList /></RoleGuard></AuthGuard> },
   { path: '/inventory/orders/:id', element: <AuthGuard><RoleGuard module="inventory"><PurchaseOrderDetail /></RoleGuard></AuthGuard> },
+  { path: '/inventory/suppliers', element: <AuthGuard><RoleGuard module="inventory"><SupplierManagement /></RoleGuard></AuthGuard> },
 
   // Phase 16: Billing & Invoice Management
   { path: '/billing/invoices', element: <AuthGuard><RoleGuard module="billing"><InvoiceListScreen /></RoleGuard></AuthGuard> },
@@ -248,18 +301,23 @@ const router = createBrowserRouter([
   // Phase 17: Payment Management & Financial Reporting
   { path: '/finance/dashboard', element: <AuthGuard><RoleGuard module="finance"><FinanceDashboard /></RoleGuard></AuthGuard> },
   { path: '/finance/payments', element: <AuthGuard><RoleGuard module="finance"><PaymentListScreen /></RoleGuard></AuthGuard> },
+  { path: '/finance/payments/:id', element: <AuthGuard><RoleGuard module="finance"><PaymentDetailScreen /></RoleGuard></AuthGuard> },
+  { path: '/finance/receipts', element: <AuthGuard><RoleGuard module="finance"><ReceiptManagementScreen /></RoleGuard></AuthGuard> },
+  { path: '/finance/reports/:reportType', element: <AuthGuard><RoleGuard module="finance"><FinanceReportScreen /></RoleGuard></AuthGuard> },
   { path: '/finance/tax', element: <AuthGuard><RoleGuard module="finance"><TaxReport /></RoleGuard></AuthGuard> },
 
   // Phase 18: Customer Support & Feedback
   { path: '/support/dashboard', element: <AuthGuard><RoleGuard module="support"><SupportDashboard /></RoleGuard></AuthGuard> },
   { path: '/support/tickets', element: <AuthGuard><RoleGuard module="support"><SupportTicketQueue /></RoleGuard></AuthGuard> },
+  { path: '/support/new', element: <AuthGuard><RoleGuard module="support"><SupportTicketCreateScreen /></RoleGuard></AuthGuard> },
   { path: '/support/tickets/:id', element: <AuthGuard><RoleGuard module="support"><TicketDetailScreen /></RoleGuard></AuthGuard> },
   { path: '/support/feedback', element: <AuthGuard><RoleGuard module="support"><FeedbackList /></RoleGuard></AuthGuard> },
   { path: '/support/feedback/:id', element: <AuthGuard><RoleGuard module="support"><FeedbackDetail /></RoleGuard></AuthGuard> },
 
   // Phase 19: Governance, CMS & Intelligence
   { path: '/governance/cms', element: <AuthGuard><RoleGuard module="settings"><CMSManager /></RoleGuard></AuthGuard> },
-  { path: '/governance/reports', element: <AuthGuard><RoleGuard module="settings"><ReportsHub /></RoleGuard></AuthGuard> },
+  { path: '/marketing/dashboard', element: <AuthGuard><RoleGuard module="settings"><CMSManager /></RoleGuard></AuthGuard> },
+  { path: '/governance/reports', element: <AuthGuard><RoleGuard module="reports"><ReportsHub /></RoleGuard></AuthGuard> },
   { path: '/governance/audit', element: <AuthGuard><RoleGuard module="settings"><AuditLogs /></RoleGuard></AuthGuard> },
   { path: '/governance/coupons', element: <AuthGuard><RoleGuard module="settings"><CouponManager /></RoleGuard></AuthGuard> },
 
@@ -268,31 +326,49 @@ const router = createBrowserRouter([
   { path: '/system/permissions', element: <AuthGuard><RoleGuard module="settings"><PermissionsSettings /></RoleGuard></AuthGuard> },
   { path: '/system/sync', element: <AuthGuard><RoleGuard module="settings"><OfflineSyncQueue /></RoleGuard></AuthGuard> },
 
+  // Phase 18: Deep-link aliases
+  { path: '/jobs/:srId', element: <ParamRedirect resolve={(params) => `/field/job/${params.srId ?? ''}`} /> },
+  { path: '/sr/:srId', element: <ParamRedirect resolve={(params) => `/service-requests/${params.srId ?? ''}`} /> },
+  { path: '/estimate/:srId', element: <ParamRedirect resolve={(params) => `/estimates/${params.srId ?? ''}`} /> },
+  { path: '/invoice/:invoiceId', element: <ParamRedirect resolve={(params) => `/billing/invoices/${params.invoiceId ?? ''}`} /> },
+  { path: '/ticket/:ticketId', element: <ParamRedirect resolve={(params) => `/support/tickets/${params.ticketId ?? ''}`} /> },
+  { path: '/amc/:contractId', element: <ParamRedirect resolve={(params) => `/amc/contract/${params.contractId ?? ''}`} /> },
+  { path: '/renewal/:contractId', element: <ParamRedirect resolve={(params) => `/amc/dashboard?focus=renewals&contractId=${params.contractId ?? ''}`} /> },
+  { path: '/offer/:offerId', element: <ParamRedirect resolve={(params) => `/governance/coupons?offerId=${params.offerId ?? ''}`} /> },
+
   { path: '/technician-workflow', element: <AuthGuard><RoleGuard module="jobs"><Placeholder title="Phase 8: Technician Field Workflow" /></RoleGuard></AuthGuard> },
   { path: '/inventory', element: <Navigate to="/inventory/catalog" replace /> },
   { path: '/billing', element: <Navigate to="/billing/dashboard" replace /> },
   { path: '/finance', element: <Navigate to="/finance/dashboard" replace /> },
   { path: '/team', element: <AuthGuard><RoleGuard module="team"><TechnicianListScreen /></RoleGuard></AuthGuard> },
   { path: '/team/availability', element: <AuthGuard><RoleGuard module="team"><TechnicianAvailabilityBoard /></RoleGuard></AuthGuard> },
+  { path: '/team/create', element: <AuthGuard><RoleGuard module="team"><TechnicianEditorScreen /></RoleGuard></AuthGuard> },
+  { path: '/team/:id/edit', element: <AuthGuard><RoleGuard module="team"><TechnicianEditorScreen /></RoleGuard></AuthGuard> },
   { path: '/team/:id', element: <AuthGuard><RoleGuard module="team"><TechnicianDetailScreen /></RoleGuard></AuthGuard> },
-  { path: '/team/create', element: <AuthGuard><RoleGuard module="team"><CreateUserScreen /></RoleGuard></AuthGuard> },
   { path: '/profile', element: <AuthGuard><MyProfileScreen /></AuthGuard> },
   { path: '/customers', element: <AuthGuard><RoleGuard module="customers"><CustomerListScreen /></RoleGuard></AuthGuard> },
   { path: '/customers/create', element: <AuthGuard><RoleGuard module="customers"><CreateCustomerScreen /></RoleGuard></AuthGuard> },
   { path: '/customers/:id', element: <AuthGuard><RoleGuard module="customers"><Customer360ViewScreen /></RoleGuard></AuthGuard> },
   { path: '/customers/:id/edit', element: <AuthGuard><RoleGuard module="customers"><CreateCustomerScreen /></RoleGuard></AuthGuard> },
-  { path: '/marketing', element: <Navigate to="/governance/cms" replace /> },
+  { path: '/marketing', element: <Navigate to="/marketing/dashboard" replace /> },
   { path: '/reports', element: <Navigate to="/governance/reports" replace /> },
   { path: '/settings', element: <AuthGuard><RoleGuard module="settings"><SystemConfigHomeScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/master/services', element: <AuthGuard><RoleGuard module="settings"><ServiceCatalogScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/master/brands', element: <AuthGuard><RoleGuard module="settings"><ServiceCatalogScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/master/zones', element: <AuthGuard><RoleGuard module="settings"><ZoneManagementScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/master/hours', element: <AuthGuard><RoleGuard module="settings"><BusinessHoursScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/master/pricing', element: <AuthGuard><RoleGuard module="settings"><PricingConfigScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/master/amc', element: <AuthGuard><RoleGuard module="settings"><PricingConfigScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/master/workflow', element: <AuthGuard><RoleGuard module="settings"><WorkflowConfigScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/master/sla', element: <AuthGuard><RoleGuard module="settings"><WorkflowConfigScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/master/tax', element: <AuthGuard><RoleGuard module="settings"><TaxConfigScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/master/notifications', element: <AuthGuard><RoleGuard module="settings"><NotificationTemplates /></RoleGuard></AuthGuard> },
   { path: '/settings/users', element: <AuthGuard><RoleGuard module="settings"><UserManagementListScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/users/create', element: <AuthGuard><RoleGuard module="settings"><CreateUserScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/users/:id', element: <AuthGuard><RoleGuard module="settings"><UserDetailScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/users/:id/edit', element: <AuthGuard><RoleGuard module="settings"><CreateUserScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/roles', element: <AuthGuard><RoleGuard module="settings"><RoleManagementListScreen /></RoleGuard></AuthGuard> },
+  { path: '/settings/roles/create', element: <AuthGuard><RoleGuard module="settings"><RolePermissionEditorScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/roles/:id', element: <AuthGuard><RoleGuard module="settings"><RolePermissionEditorScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/branches', element: <AuthGuard><RoleGuard module="settings"><BranchManagementListScreen /></RoleGuard></AuthGuard> },
   { path: '/settings/branches/:id', element: <AuthGuard><RoleGuard module="settings"><BranchDetailScreen /></RoleGuard></AuthGuard> },
@@ -312,7 +388,88 @@ const finalRouter = createBrowserRouter(
 );
 
 export default function AppRouter() {
+  const initialize = useAuthStore((state) => state.initialize);
+  const status = useAuthStore((state) => state.status);
+  const token = useAuthStore((state) => state.token);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
   const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
+
+  useEffect(() => {
+    const deepLinkPath = resolveDeepLinkPath(window.location.href);
+    if (deepLinkPath && `${window.location.pathname}${window.location.search}` !== deepLinkPath) {
+      navigateToPath(deepLinkPath, true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePushIntent = (event: Event) => {
+      const detail = (event as CustomEvent<PushNavigationIntent>).detail;
+      const path = resolvePushIntentPath(detail);
+      if (!path) {
+        return;
+      }
+
+      if (useAuthStore.getState().status === AuthStatus.AUTHENTICATED) {
+        navigateToPath(path);
+      } else {
+        queuePendingRoute(path);
+      }
+    };
+
+    window.addEventListener("coolzo:push-opened", handlePushIntent as EventListener);
+    window.addEventListener("coolzo:push-initial", handlePushIntent as EventListener);
+    return () => {
+      window.removeEventListener("coolzo:push-opened", handlePushIntent as EventListener);
+      window.removeEventListener("coolzo:push-initial", handlePushIntent as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== AuthStatus.AUTHENTICATED || showSplash) {
+      return;
+    }
+
+    const pendingPath = consumePendingRoute();
+    if (pendingPath && `${window.location.pathname}${window.location.search}` !== pendingPath) {
+      navigateToPath(pendingPath, true);
+    }
+  }, [showSplash, status]);
+
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "hidden") {
+        LocalStorage.set(StorageKey.SYSTEM_LAST_BACKGROUND_AT, new Date().toISOString());
+        return;
+      }
+
+      const backgroundedAt = LocalStorage.get<string>(StorageKey.SYSTEM_LAST_BACKGROUND_AT);
+      if (!backgroundedAt || status !== AuthStatus.AUTHENTICATED || !token || !refreshToken) {
+        return;
+      }
+
+      const elapsed = Date.now() - new Date(backgroundedAt).getTime();
+      if (elapsed < 30 * 60 * 1000) {
+        return;
+      }
+
+      try {
+        const refreshed = await authRepository.refreshToken(token, refreshToken);
+        useAuthStore.getState().login(refreshed.user, refreshed.token, refreshed.refreshToken);
+      } catch (error) {
+        console.error("Silent refresh failed after background timeout", error);
+        useAuthStore.getState().setSessionExpired();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshToken, status, token]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2000);

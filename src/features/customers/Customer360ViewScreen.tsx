@@ -40,6 +40,8 @@ export default function Customer360ViewScreen() {
   const [customer, setCustomer] = React.useState<Customer | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [activeTab, setActiveTab] = React.useState<'history' | 'equipment' | 'addresses' | 'billing'>('history')
+  const [newNote, setNewNote] = React.useState("")
+  const [isSavingNote, setIsSavingNote] = React.useState(false)
 
   React.useEffect(() => {
     const fetchCustomer = async () => {
@@ -55,6 +57,29 @@ export default function Customer360ViewScreen() {
     }
     fetchCustomer();
   }, [id])
+
+  const handleAddNote = async () => {
+    if (!customer || !newNote.trim()) {
+      return
+    }
+
+    try {
+      setIsSavingNote(true)
+      const note = await customerRepository.addNote(customer.id, newNote.trim())
+      React.startTransition(() => {
+        setCustomer({
+          ...customer,
+          notes: [note, ...customer.notes],
+        })
+      })
+      setNewNote("")
+      toast.success("Customer note added")
+    } catch (error) {
+      toast.error("Failed to add note")
+    } finally {
+      setIsSavingNote(false)
+    }
+  }
 
   if (isLoading) return <InlineLoader className="h-screen" />;
   if (!customer) return <div className="p-8 text-center">Customer not found</div>;
@@ -108,6 +133,25 @@ export default function Customer360ViewScreen() {
         </div>
       </div>
 
+      {customer.riskLevel !== 'low' && (
+        <AdminCard className={cn(
+          "p-4 border-l-4",
+          customer.riskLevel === 'high' ? "border-l-status-emergency" : "border-l-status-urgent"
+        )}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className={customer.riskLevel === 'high' ? "text-status-emergency" : "text-status-urgent"} />
+            <div>
+              <p className="text-sm font-bold text-brand-navy">
+                {customer.riskLevel === 'high' ? "High-risk customer flag" : "Customer needs attention"}
+              </p>
+              <p className="text-xs text-brand-muted">
+                Outstanding amount: ₹{customer.outstandingAmount} • Open support tickets: {customer.openSupportTicketCount ?? customer.supportTickets.length}
+              </p>
+            </div>
+          </div>
+        </AdminCard>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left Sidebar: Quick Stats & Identity */}
         <div className="space-y-6">
@@ -139,12 +183,19 @@ export default function Customer360ViewScreen() {
                 <div className="mt-4 space-y-2">
                   <div className="flex justify-between text-[10px] font-bold text-brand-muted uppercase tracking-widest">
                     <span>Visit Progress</span>
-                    <span>2/4 Visits</span>
+                    <span>{customer.amcSummary?.visitsUsed ?? 0}/{customer.amcSummary?.visitsIncluded ?? 0} Visits</span>
                   </div>
                   <div className="w-full h-1.5 bg-brand-navy/5 rounded-full overflow-hidden">
-                    <div className="w-1/2 h-full bg-brand-gold" />
+                    <div
+                      className="h-full bg-brand-gold"
+                      style={{
+                        width: `${customer.amcSummary?.visitsIncluded ? Math.min(((customer.amcSummary.visitsUsed ?? 0) / customer.amcSummary.visitsIncluded) * 100, 100) : 0}%`,
+                      }}
+                    />
                   </div>
-                  <p className="text-[10px] text-brand-muted text-center mt-2">Expires on 15 Dec 2024</p>
+                  <p className="text-[10px] text-brand-muted text-center mt-2">
+                    {customer.amcSummary?.currentPlanName ?? 'Active plan'} • Next visit {customer.amcSummary?.nextVisitDate ? new Date(customer.amcSummary.nextVisitDate).toLocaleDateString() : 'TBD'}
+                  </p>
                 </div>
               )}
               {customer.amcStatus !== 'active' && (
@@ -222,7 +273,7 @@ export default function Customer360ViewScreen() {
               {activeTab === 'history' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <SectionHeader title="Recent Service Requests" className="mb-0" />
+                    <SectionHeader title="Service & Lifecycle History" className="mb-0" />
                     <AdminButton 
                       variant="outline" 
                       size="sm"
@@ -232,19 +283,28 @@ export default function Customer360ViewScreen() {
                     </AdminButton>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Mock SR Cards */}
-                    {[1, 2].map(i => (
-                      <AdminCard key={i} className="p-4 hover:border-brand-gold transition-all cursor-pointer group">
+                    {customer.serviceHistory.length === 0 && (
+                      <AdminCard className="p-6 md:col-span-2">
+                        <p className="text-sm text-brand-muted">No service lifecycle history is available for this customer yet.</p>
+                      </AdminCard>
+                    )}
+                    {customer.serviceHistory.map((item) => (
+                      <AdminCard key={item.id} className="p-4 hover:border-brand-gold transition-all cursor-pointer group">
                         <div className="flex justify-between mb-2">
-                          <span className="text-xs font-bold text-brand-navy">SR-9928{i}</span>
-                          <StatusBadge status={i === 1 ? 'completed' : 'processing'}>
-                            {i === 1 ? 'Completed' : 'Assigned'}
+                          <span className="text-xs font-bold text-brand-navy">{item.referenceNumber}</span>
+                          <StatusBadge status={item.status.toLowerCase().includes('complete') || item.status.toLowerCase().includes('paid') ? 'completed' : 'processing'}>
+                            {item.status}
                           </StatusBadge>
                         </div>
-                        <h4 className="text-sm font-bold text-brand-navy mb-1">AC Deep Cleaning</h4>
-                        <p className="text-[10px] text-brand-muted uppercase tracking-widest mb-3">12 Apr 2024 • Split AC</p>
+                        <h4 className="text-sm font-bold text-brand-navy mb-1">{item.title}</h4>
+                        <p className="text-[10px] text-brand-muted uppercase tracking-widest mb-3">
+                          {item.historyType} • {new Date(item.eventDate).toLocaleDateString()}
+                        </p>
+                        <p className="text-xs text-brand-muted leading-relaxed">{item.detail}</p>
                         <div className="flex items-center justify-between pt-3 border-t border-border">
-                          <span className="text-[10px] font-bold text-brand-gold uppercase tracking-widest">₹1,500</span>
+                          <span className="text-[10px] font-bold text-brand-gold uppercase tracking-widest">
+                            {typeof item.amount === 'number' ? `₹${item.amount}` : item.historyType}
+                          </span>
                           <ChevronRight size={14} className="text-brand-muted group-hover:text-brand-gold transition-transform group-hover:translate-x-1" />
                         </div>
                       </AdminCard>
@@ -352,16 +412,20 @@ export default function Customer360ViewScreen() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { id: 'INV-1001', date: '12 Apr 2024', amount: '1,500', status: 'Paid' },
-                          { id: 'INV-1002', date: '15 Apr 2024', amount: '3,000', status: 'Unpaid' },
-                        ].map(inv => (
+                        {customer.invoices.length === 0 && (
+                          <tr>
+                            <td className="p-4 text-sm text-brand-muted" colSpan={5}>
+                              No invoices found for this customer.
+                            </td>
+                          </tr>
+                        )}
+                        {customer.invoices.map(inv => (
                           <tr key={inv.id} className="border-t border-border hover:bg-brand-navy/[0.02] transition-colors">
-                            <td className="p-4 text-xs font-bold text-brand-navy">{inv.id}</td>
-                            <td className="p-4 text-xs text-brand-muted">{inv.date}</td>
+                            <td className="p-4 text-xs font-bold text-brand-navy">{inv.invoiceNumber}</td>
+                            <td className="p-4 text-xs text-brand-muted">{new Date(inv.issueDate).toLocaleDateString()}</td>
                             <td className="p-4 text-xs font-bold text-brand-navy">₹{inv.amount}</td>
                             <td className="p-4">
-                              <StatusBadge status={inv.status === 'Paid' ? 'completed' : 'urgent'}>
+                              <StatusBadge status={inv.balanceAmount <= 0 ? 'completed' : 'urgent'}>
                                 {inv.status}
                               </StatusBadge>
                             </td>
@@ -386,6 +450,9 @@ export default function Customer360ViewScreen() {
               <SectionHeader title="Internal Notes" icon={<MessageSquare size={18} />} />
               <div className="space-y-4 mt-4">
                 <div className="max-h-60 overflow-y-auto space-y-4 pr-2">
+                  {customer.notes.length === 0 && (
+                    <p className="text-sm text-brand-muted">No internal notes recorded yet.</p>
+                  )}
                   {customer.notes.map(note => (
                     <div key={note.id} className="p-3 bg-brand-navy/5 rounded-xl text-xs">
                       <div className="flex items-center justify-between mb-2">
@@ -401,39 +468,74 @@ export default function Customer360ViewScreen() {
                     type="text"
                     placeholder="Add a private note..."
                     className="flex-1 p-3 bg-brand-navy/5 border border-brand-navy/10 rounded-xl text-xs focus:border-brand-gold outline-none"
+                    value={newNote}
+                    onChange={(event) => setNewNote(event.target.value)}
                   />
-                  <AdminButton size="sm">Add</AdminButton>
+                  <AdminButton size="sm" isLoading={isSavingNote} onClick={handleAddNote}>
+                    Add
+                  </AdminButton>
                 </div>
               </div>
             </AdminCard>
 
             <AdminCard className="p-6">
-              <SectionHeader title="Communication Preferences" icon={<Send size={18} />} />
+              <SectionHeader title="Support Tickets" icon={<MessageSquare size={18} />} />
               <div className="space-y-4 mt-4">
-                {[
-                  { id: 'wa', label: 'WhatsApp Notifications', active: true },
-                  { id: 'em', label: 'Email Updates', active: true },
-                  { id: 'sms', label: 'SMS Alerts', active: false },
-                ].map(pref => (
-                  <div key={pref.id} className="flex items-center justify-between p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
-                    <span className="text-xs font-bold text-brand-navy">{pref.label}</span>
-                    <div className={cn(
-                      "w-10 h-5 rounded-full relative transition-colors cursor-pointer",
-                      pref.active ? "bg-status-completed" : "bg-brand-muted/30"
-                    )}>
-                      <div className={cn(
-                        "absolute top-1 size-3 bg-white rounded-full transition-all",
-                        pref.active ? "right-1" : "left-1"
-                      )} />
+                {customer.supportTickets.length === 0 && (
+                  <p className="text-sm text-brand-muted">No active support tickets for this customer.</p>
+                )}
+                {customer.supportTickets.map(ticket => (
+                  <div key={ticket.id} className="p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-brand-navy">{ticket.ticketNumber}</p>
+                        <p className="text-sm text-brand-navy">{ticket.subject}</p>
+                      </div>
+                      <StatusBadge status={ticket.status.toLowerCase().includes('close') || ticket.status.toLowerCase().includes('resolve') ? 'completed' : 'urgent'}>
+                        {ticket.status}
+                      </StatusBadge>
                     </div>
+                    <p className="mt-2 text-[10px] font-bold text-brand-muted uppercase tracking-widest">
+                      {ticket.priority} priority • {new Date(ticket.createdAt).toLocaleDateString()} {ticket.assignedOwnerName ? `• ${ticket.assignedOwnerName}` : ''}
+                    </p>
                   </div>
                 ))}
-                <AdminButton variant="outline" size="sm" className="w-full mt-2">
-                  Send Manual Message
-                </AdminButton>
               </div>
             </AdminCard>
           </div>
+
+          <AdminCard className="p-6">
+            <SectionHeader title="Communication Preferences" icon={<Send size={18} />} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {[
+                { id: 'wa', label: 'WhatsApp Notifications', active: customer.communicationPreference?.whatsAppEnabled ?? false },
+                { id: 'em', label: 'Email Updates', active: customer.communicationPreference?.emailEnabled ?? false },
+                { id: 'sms', label: 'SMS Alerts', active: customer.communicationPreference?.smsEnabled ?? false },
+                { id: 'push', label: 'Push Alerts', active: customer.communicationPreference?.pushEnabled ?? false },
+              ].map(pref => (
+                <div key={pref.id} className="flex items-center justify-between p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
+                  <span className="text-xs font-bold text-brand-navy">{pref.label}</span>
+                  <div className={cn(
+                    "w-10 h-5 rounded-full relative transition-colors",
+                    pref.active ? "bg-status-completed" : "bg-brand-muted/30"
+                  )}>
+                    <div className={cn(
+                      "absolute top-1 size-3 bg-white rounded-full transition-all",
+                      pref.active ? "right-1" : "left-1"
+                    )} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <p className="text-xs text-brand-muted">
+                Preferred channels: {customer.communicationPreference?.mobileNumber || customer.phone} • {customer.communicationPreference?.emailAddress || customer.email}
+              </p>
+              <AdminButton variant="outline" size="sm" onClick={() => toast.info("Manual customer communication logging is available through support workflows.")}>
+                Send Manual Message
+              </AdminButton>
+            </div>
+          </AdminCard>
         </div>
       </div>
     </div>

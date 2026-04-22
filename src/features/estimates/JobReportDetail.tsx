@@ -4,14 +4,11 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { jobReportRepository, JobReport } from "@/core/network/job-report-repository"
 import { 
-  ClipboardCheck, 
   ChevronLeft, 
-  Clock, 
   CheckCircle2, 
   User, 
   Camera,
@@ -19,7 +16,6 @@ import {
   MessageSquare,
   AlertCircle,
   Download,
-  Share2,
   Check,
   X,
   Wrench
@@ -109,9 +105,10 @@ export default function JobReportDetail() {
               </div>
             </div>
             <div className="space-y-3">
-              <QualityMetric label="Checklist Completion" value="100%" pass />
-              <QualityMetric label="Photo Documentation" value={`${report.photos.length} Photos`} pass={report.photos.length >= 2} />
-              <QualityMetric label="Customer Signature" value="Collected" pass />
+              <QualityMetric label="Checklist Completion" value={`${report.qualityBreakdown?.checklistCompletion || 0}/40`} pass={(report.qualityBreakdown?.checklistCompletion || 0) >= 30} />
+              <QualityMetric label="Photo Documentation" value={`${report.qualityBreakdown?.photoCoverage || 0}/30`} pass={(report.qualityBreakdown?.photoCoverage || 0) >= 20} />
+              <QualityMetric label="Customer Signature" value={`${report.qualityBreakdown?.customerSignature || 0}/20`} pass={(report.qualityBreakdown?.customerSignature || 0) === 20} />
+              <QualityMetric label="Observation Depth" value={`${report.qualityBreakdown?.observationDepth || 0}/10`} pass={(report.qualityBreakdown?.observationDepth || 0) === 10} />
             </div>
           </AdminCard>
 

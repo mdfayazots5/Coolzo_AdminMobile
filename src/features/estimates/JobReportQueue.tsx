@@ -6,7 +6,7 @@
 import * as React from "react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
-import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
+import { InlineLoader } from "@/components/shared/Layout"
 import { jobReportRepository, JobReport } from "@/core/network/job-report-repository"
 import { 
   ClipboardCheck, 
@@ -29,6 +29,7 @@ export default function JobReportQueue() {
   const [reports, setReports] = React.useState<JobReport[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [filter, setFilter] = React.useState<'all' | 'pending_review' | 'approved' | 'flagged'>('all')
+  const [searchTerm, setSearchTerm] = React.useState("")
 
   React.useEffect(() => {
     const fetchReports = async () => {
@@ -44,7 +45,12 @@ export default function JobReportQueue() {
     fetchReports();
   }, [])
 
-  const filteredReports = reports.filter(r => filter === 'all' || r.status === filter);
+  const filteredReports = reports.filter((report) => {
+    const matchesFilter = filter === 'all' || report.status === filter;
+    const matchesSearch = [report.srNumber, report.technicianName, report.serviceType]
+      .some((value) => value.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesFilter && matchesSearch;
+  });
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -56,7 +62,7 @@ export default function JobReportQueue() {
           <p className="text-sm text-brand-muted">Review and approve technician service reports</p>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<BarChart3 size={18} />}>Quality Dashboard</AdminButton>
+          <AdminButton variant="outline" icon={<BarChart3 size={18} />} onClick={() => navigate('/job-reports/dashboard')}>Quality Dashboard</AdminButton>
         </div>
       </div>
 
@@ -67,6 +73,8 @@ export default function JobReportQueue() {
             type="text" 
             placeholder="Search by SR #, Technician or Service Type..."
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">

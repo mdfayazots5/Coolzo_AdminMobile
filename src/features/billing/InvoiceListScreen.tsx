@@ -5,202 +5,309 @@
 
 import * as React from "react"
 import { motion } from "motion/react"
+import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
+import {
+  AlertCircle,
+  Building2,
+  Calendar,
+  ChevronRight,
+  Download,
+  FileText,
+  Filter,
+  MessageSquare,
+  Plus,
+  Search,
+  User,
+} from "lucide-react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
-import { invoiceRepository, Invoice, InvoiceStatus } from "@/core/network/invoice-repository"
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  ChevronRight, 
-  FileText, 
-  Download,
-  Calendar,
-  User,
-  CreditCard,
-  AlertCircle,
-  MoreVertical,
-  Mail,
-  MessageSquare
-} from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
+import {
+  AccountsReceivableDashboard,
+  Invoice,
+  InvoiceStatus,
+  invoiceRepository,
+} from "@/core/network/invoice-repository"
 import { cn } from "@/lib/utils"
-import { useNavigate } from "react-router-dom"
 
 export default function InvoiceListScreen() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
+  const [dashboard, setDashboard] = React.useState<AccountsReceivableDashboard | null>(null)
   const [invoices, setInvoices] = React.useState<Invoice[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<InvoiceStatus | 'all'>('all')
+  const [filter, setFilter] = React.useState<InvoiceStatus | "all">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
 
-  React.useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const data = await invoiceRepository.getInvoices({});
-        setInvoices(data);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const [invoiceData, arDashboard] = await Promise.all([
+        invoiceRepository.getInvoices({ status: filter, search: searchQuery }),
+        invoiceRepository.getAccountsReceivableDashboard(),
+      ])
+      setInvoices(invoiceData)
+      setDashboard(arDashboard)
+    } catch (error) {
+      console.error(error)
+      toast.error("Unable to load invoices")
+    } finally {
+      setIsLoading(false)
     }
-    fetchInvoices();
-  }, [])
+  }, [filter, searchQuery])
 
-  const filteredInvoices = invoices.filter(inv => {
-    const matchesFilter = filter === 'all' || inv.status === filter;
-    const matchesSearch = inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          inv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          inv.srNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  React.useEffect(() => {
+    void loadData()
+  }, [loadData])
 
-  if (isLoading) return <InlineLoader className="h-screen" />;
+  const handleBulkExport = async (format: "csv" | "pdf") => {
+    try {
+      await invoiceRepository.bulkExportInvoices({ format })
+      toast.success(`Invoice ${format.toUpperCase()} export prepared`)
+    } catch (error) {
+      toast.error("Bulk export failed")
+    }
+  }
+
+  const handleCreateCorporateInvoice = async () => {
+    try {
+      const invoice = await invoiceRepository.createCorporateInvoice("corporate-account")
+      toast.success("Corporate invoice generated")
+      navigate(`/billing/invoices/${invoice.id}`)
+    } catch (error) {
+      toast.error("Unable to generate corporate invoice")
+    }
+  }
+
+  const handleCreateProforma = async () => {
+    try {
+      const invoice = await invoiceRepository.createProformaInvoice("proforma-customer")
+      toast.success("Proforma invoice generated")
+      navigate(`/billing/invoices/${invoice.id}`)
+    } catch (error) {
+      toast.error("Unable to generate proforma invoice")
+    }
+  }
+
+  const filteredInvoices = invoices
+    .filter((invoice) => {
+      const normalizedQuery = searchQuery.trim().toLowerCase()
+      if (!normalizedQuery) {
+        return true
+      }
+
+      return (
+        invoice.invoiceNumber.toLowerCase().includes(normalizedQuery) ||
+        invoice.customerName.toLowerCase().includes(normalizedQuery) ||
+        invoice.srNumber.toLowerCase().includes(normalizedQuery)
+      )
+    })
+    .sort((left, right) => new Date(right.issueDate).getTime() - new Date(left.issueDate).getTime())
+
+  if (isLoading || !dashboard) {
+    return <InlineLoader className="h-screen" />
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">Invoices & Billing</h1>
-          <p className="text-sm text-brand-muted">Manage all customer invoices and payment statuses</p>
+          <p className="text-sm text-brand-muted">Billing operations, reminders, exports, and receivable follow-up</p>
         </div>
-        <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<Download size={18} />}>Export Financials</AdminButton>
-          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/billing/new')}>Create Manual Invoice</AdminButton>
+        <div className="flex flex-wrap gap-2">
+          <AdminButton variant="outline" icon={<Download size={18} />} onClick={() => handleBulkExport("csv")}>
+            Export CSV
+          </AdminButton>
+          <AdminButton variant="outline" icon={<Building2 size={18} />} onClick={handleCreateCorporateInvoice}>
+            Corporate Invoice
+          </AdminButton>
+          <AdminButton variant="outline" icon={<FileText size={18} />} onClick={handleCreateProforma}>
+            Proforma Invoice
+          </AdminButton>
+          <AdminButton icon={<Plus size={18} />} onClick={() => navigate("/billing/new")}>
+            Create Manual Invoice
+          </AdminButton>
         </div>
       </div>
 
-      {/* Quick Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <MetricCard label="Total Outstanding" value="₹1.2L" trend="+12% vs last month" color="navy" />
-        <MetricCard label="Paid This Month" value="₹4.8L" trend="+5% vs last month" color="gold" />
-        <MetricCard label="Overdue Amount" value="₹28.5k" trend="8 Invoices" color="red" />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+        <AdminCard className="xl:col-span-3 p-8 bg-brand-navy text-white">
+          <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Outstanding Collection Watch</p>
+          <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-4xl font-bold">₹{dashboard.totalOutstanding.toLocaleString()}</p>
+              <p className="mt-2 text-sm text-white/70">Total outstanding across current AR buckets</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {dashboard.aging.map((bucket) => (
+                <div key={bucket.label} className="rounded-3xl bg-white/10 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">{bucket.label}</p>
+                  <p className="mt-2 text-lg font-bold">₹{bucket.amount.toLocaleString()}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-white/60">{bucket.count} invoices</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </AdminCard>
+
+        <AdminCard className="p-6 border-status-emergency/20 bg-status-emergency/5">
+          <SectionHeader title="Reminder Queue" icon={<AlertCircle size={18} />} />
+          <div className="mt-4 space-y-4">
+            {dashboard.overdueInvoices.slice(0, 2).map((invoice) => (
+              <div key={invoice.id} className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-sm font-bold text-brand-navy">{invoice.customerName}</p>
+                <p className="text-[10px] uppercase tracking-widest text-brand-muted">{invoice.invoiceNumber}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm font-bold text-status-emergency">₹{invoice.balanceDue.toLocaleString()}</span>
+                  <button
+                    onClick={async () => {
+                      await invoiceRepository.sendPaymentReminder(invoice.id)
+                      toast.success(`Reminder sent for ${invoice.invoiceNumber}`)
+                    }}
+                    className="rounded-xl bg-brand-navy px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-brand-gold"
+                  >
+                    Remind
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="relative flex-1">
           <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted" />
-          <input 
-            type="text" 
-            placeholder="Search by Invoice #, Customer or SR #..."
+          <input
+            type="text"
+            placeholder="Search by invoice, customer, or SR number..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="w-full rounded-2xl border border-border bg-white py-3 pl-12 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-          <FilterButton active={filter === 'all'} onClick={() => setFilter('all')} label="All" />
-          <FilterButton active={filter === 'unpaid'} onClick={() => setFilter('unpaid')} label="Unpaid" />
-          <FilterButton active={filter === 'paid'} onClick={() => setFilter('paid')} label="Paid" />
-          <FilterButton active={filter === 'overdue'} onClick={() => setFilter('overdue')} label="Overdue" />
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label="All" />
+          <FilterButton active={filter === "unpaid"} onClick={() => setFilter("unpaid")} label="Unpaid" />
+          <FilterButton active={filter === "paid"} onClick={() => setFilter("paid")} label="Paid" />
+          <FilterButton active={filter === "overdue"} onClick={() => setFilter("overdue")} label="Overdue" />
         </div>
       </div>
 
-      <AdminCard className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left border-b border-border bg-brand-navy/[0.02]">
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Invoice Info</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Customer</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Amount</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Status</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest">Due Date</th>
-                <th className="p-6 text-[10px] font-bold text-brand-muted uppercase tracking-widest text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredInvoices.map((inv, idx) => (
-                <motion.tr
-                  key={inv.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  className="group hover:bg-brand-navy/[0.01] transition-colors"
-                >
-                  <td className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="size-10 bg-brand-navy/5 rounded-xl flex items-center justify-center text-brand-navy shrink-0">
-                        <FileText size={20} />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+        <AdminCard className="overflow-hidden xl:col-span-3">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-brand-navy/[0.02] text-left">
+                  <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Invoice</th>
+                  <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Customer</th>
+                  <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Amount</th>
+                  <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Status</th>
+                  <th className="p-6 text-[10px] font-bold uppercase tracking-widest text-brand-muted">Due Date</th>
+                  <th className="p-6 text-right text-[10px] font-bold uppercase tracking-widest text-brand-muted">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredInvoices.map((invoice, index) => (
+                  <motion.tr
+                    key={invoice.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="group hover:bg-brand-navy/[0.01]"
+                  >
+                    <td className="p-6">
+                      <div className="flex items-center gap-4">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-brand-navy/5 text-brand-navy">
+                          <FileText size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-brand-navy">{invoice.invoiceNumber}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-brand-muted">{invoice.srNumber}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-brand-navy">{inv.invoiceNumber}</p>
-                        <p className="text-[10px] text-brand-muted uppercase tracking-widest">SR: {inv.srNumber}</p>
+                    </td>
+                    <td className="p-6">
+                      <div className="flex items-center gap-2">
+                        {invoice.customerType === "corporate" ? <Building2 size={14} className="text-brand-muted" /> : <User size={14} className="text-brand-muted" />}
+                        <div>
+                          <p className="text-xs font-bold text-brand-navy">{invoice.customerName}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-brand-muted">{invoice.customerType}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <div className="flex items-center gap-2">
-                      <User size={14} className="text-brand-muted" />
-                      <div>
-                        <p className="text-xs font-bold text-brand-navy">{inv.customerName}</p>
-                        <p className="text-[10px] text-brand-muted uppercase tracking-widest">{inv.customerType}</p>
+                    </td>
+                    <td className="p-6">
+                      <p className="text-sm font-bold text-brand-navy">₹{invoice.netPayable.toLocaleString()}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-brand-muted">Balance ₹{invoice.balanceDue.toLocaleString()}</p>
+                    </td>
+                    <td className="p-6">
+                      <StatusBadge status={invoice.status} />
+                    </td>
+                    <td className="p-6">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={14} className="text-brand-muted" />
+                        <span className={cn("text-xs font-bold", invoice.status === "overdue" ? "text-status-emergency" : "text-brand-navy")}>
+                          {new Date(invoice.dueDate).toLocaleDateString()}
+                        </span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <p className="text-sm font-bold text-brand-navy">₹{inv.netPayable.toLocaleString()}</p>
-                    {inv.amountPaid > 0 && (
-                      <p className="text-[10px] text-status-completed font-bold uppercase tracking-widest">Paid: ₹{inv.amountPaid.toLocaleString()}</p>
-                    )}
-                  </td>
-                  <td className="p-6">
-                    <StatusBadge status={inv.status} />
-                  </td>
-                  <td className="p-6">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={14} className="text-brand-muted" />
-                      <span className={cn(
-                        "text-xs font-bold",
-                        inv.status === 'overdue' ? "text-status-emergency" : "text-brand-navy"
-                      )}>
-                        {new Date(inv.dueDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="p-6">
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="p-2 text-brand-muted hover:text-brand-gold transition-colors">
-                        <ChevronRight size={20} />
-                      </button>
-                      <button className="p-2 text-brand-muted hover:bg-brand-navy/5 rounded-lg">
-                        <MoreVertical size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </AdminCard>
+                    </td>
+                    <td className="p-6">
+                      <div className="flex items-center justify-end gap-2">
+                        {invoice.status === "overdue" && (
+                          <button
+                            onClick={async () => {
+                              await invoiceRepository.sendPaymentReminder(invoice.id)
+                              toast.success(`Reminder sent for ${invoice.invoiceNumber}`)
+                            }}
+                            className="rounded-lg p-2 text-brand-muted transition-colors hover:bg-brand-navy/5 hover:text-brand-gold"
+                          >
+                            <MessageSquare size={16} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => navigate(`/billing/invoices/${invoice.id}`)}
+                          className="rounded-lg p-2 text-brand-muted transition-colors hover:text-brand-gold"
+                        >
+                          <ChevronRight size={20} />
+                        </button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AdminCard>
+
+        <AdminCard className="p-6">
+          <SectionHeader title="Top Outstanding" icon={<Filter size={18} />} />
+          <div className="mt-4 space-y-4">
+            {dashboard.topOutstandingCustomers.map((customer) => (
+              <div key={customer.customerId} className="rounded-2xl bg-brand-navy/5 p-4">
+                <p className="text-sm font-bold text-brand-navy">{customer.customerName}</p>
+                <p className="text-[10px] uppercase tracking-widest text-brand-muted">{customer.customerType}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm font-bold text-status-emergency">₹{customer.outstandingAmount.toLocaleString()}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-brand-muted">{customer.overdueInvoices} overdue</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
+      </div>
     </div>
   )
 }
 
-function MetricCard({ label, value, trend, color }: any) {
-  const colors: any = {
-    navy: "bg-brand-navy text-white",
-    gold: "bg-brand-gold text-brand-navy",
-    red: "bg-status-emergency text-white"
-  };
+function FilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
-    <AdminCard className={cn("p-6", colors[color])}>
-      <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">{label}</p>
-      <p className="text-3xl font-bold mb-2">{value}</p>
-      <p className="text-[10px] font-medium opacity-80">{trend}</p>
-    </AdminCard>
-  )
-}
-
-function FilterButton({ active, onClick, label }: any) {
-  return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
-        "px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-        active ? "bg-brand-navy text-brand-gold" : "bg-white text-brand-muted border border-border hover:border-brand-gold"
+        "whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all",
+        active ? "bg-brand-navy text-brand-gold" : "border border-border bg-white text-brand-muted hover:border-brand-gold",
       )}
     >
       {label}
@@ -209,23 +316,21 @@ function FilterButton({ active, onClick, label }: any) {
 }
 
 function StatusBadge({ status }: { status: InvoiceStatus }) {
-  const statusMap: Record<InvoiceStatus, { color: string, text: string, icon: any }> = {
-    unpaid: { color: 'bg-brand-navy/5 text-brand-navy', text: 'Unpaid', icon: <CreditCard size={10} /> },
-    partially_paid: { color: 'bg-brand-gold/10 text-brand-gold', text: 'Partial', icon: <CreditCard size={10} /> },
-    paid: { color: 'bg-status-completed/10 text-status-completed', text: 'Paid', icon: <CreditCard size={10} /> },
-    overdue: { color: 'bg-status-emergency/10 text-status-emergency', text: 'Overdue', icon: <AlertCircle size={10} /> },
-    cancelled: { color: 'bg-brand-muted/10 text-brand-muted', text: 'Cancelled', icon: <AlertCircle size={10} /> },
-    bad_debt: { color: 'bg-brand-navy text-white', text: 'Bad Debt', icon: <AlertCircle size={10} /> },
-  };
+  const statusMap: Record<InvoiceStatus, { label: string; className: string }> = {
+    draft: { label: "Draft", className: "bg-brand-navy/5 text-brand-navy" },
+    sent: { label: "Sent", className: "bg-brand-gold/10 text-brand-gold" },
+    unpaid: { label: "Unpaid", className: "bg-brand-navy/5 text-brand-navy" },
+    partially_paid: { label: "Partial", className: "bg-brand-gold/10 text-brand-gold" },
+    paid: { label: "Paid", className: "bg-status-completed/10 text-status-completed" },
+    overdue: { label: "Overdue", className: "bg-status-emergency/10 text-status-emergency" },
+    cancelled: { label: "Cancelled", className: "bg-brand-muted/10 text-brand-muted" },
+    bad_debt: { label: "Bad Debt", className: "bg-brand-navy text-white" },
+  }
 
-  const config = statusMap[status];
-
+  const config = statusMap[status]
   return (
-    <span className={cn(
-      "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex items-center gap-1 w-fit",
-      config.color
-    )}>
-      {config.icon} {config.text}
+    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest", config.className)}>
+      {config.label}
     </span>
   )
 }

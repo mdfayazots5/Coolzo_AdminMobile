@@ -40,6 +40,7 @@ const AdminTextField = React.forwardRef<HTMLInputElement, InputProps>(
           )}
           <input
             type={showPassword ? "text" : type}
+            aria-label={props["aria-label"] || label}
             className={cn(
               "flex h-10 w-full rounded-[8px] border border-input bg-brand-surface px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-navy focus-visible:border-brand-navy disabled:cursor-not-allowed disabled:opacity-50 transition-all",
               prefixIcon && "pl-10",

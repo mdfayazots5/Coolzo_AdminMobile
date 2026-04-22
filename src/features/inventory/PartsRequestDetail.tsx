@@ -4,7 +4,6 @@
  */
 
 import * as React from "react"
-import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { inventoryRepository, PartsRequest, Part } from "@/core/network/inventory-repository"
@@ -12,14 +11,9 @@ import {
   Package, 
   ChevronLeft, 
   User, 
-  Clock, 
   CheckCircle2, 
-  XCircle, 
-  AlertCircle,
   FileText,
   Truck,
-  Check,
-  X,
   AlertTriangle
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
@@ -62,17 +56,23 @@ export default function PartsRequestDetail() {
     fetchData();
   }, [id])
 
-  const handleProcess = async (status: 'approved' | 'rejected') => {
+  const handleProcess = async (status: 'approved' | 'rejected' | 'partially_approved') => {
     if (!request) return;
     try {
       const items = request.items.map(item => ({
         ...item,
-        issuedQty: status === 'approved' ? issuedQtys[item.partId] : 0,
+        issuedQty: status === 'rejected' ? 0 : issuedQtys[item.partId],
         status: partsInfo[item.partId]?.stockQuantity >= issuedQtys[item.partId] ? 'available' : 'insufficient'
       }));
       
       await inventoryRepository.processPartsRequest(request.id, status, items);
-      toast.success(`Request ${status === 'approved' ? 'Approved' : 'Rejected'}`);
+      toast.success(
+        status === 'approved'
+          ? "Request approved"
+          : status === 'partially_approved'
+            ? "Request partially approved"
+            : "Request rejected"
+      );
       navigate('/inventory/requests');
     } catch (error) {
       toast.error("Failed to process request");
@@ -98,6 +98,7 @@ export default function PartsRequestDetail() {
           {request.status === 'pending' && (
             <>
               <AdminButton variant="outline" onClick={() => handleProcess('rejected')}>Reject Request</AdminButton>
+              <AdminButton variant="outline" onClick={() => handleProcess('partially_approved')}>Partial Approval</AdminButton>
               <AdminButton onClick={() => handleProcess('approved')}>Approve & Issue Parts</AdminButton>
             </>
           )}

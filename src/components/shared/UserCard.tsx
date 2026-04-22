@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils"
 import { User } from "@/core/network/user-repository"
 import { AdminCard } from "./Cards"
 import { RoleBadge, StatusBadge } from "./Badges"
-import { Mail, Phone, MapPin, ChevronRight } from "lucide-react"
+import { Mail, AtSign, Clock3, ChevronRight } from "lucide-react"
+import { formatDate } from "@/lib/utils"
 
 interface UserCardProps {
+  key?: React.Key;
   user: User;
   onClick?: () => void;
   className?: string;
@@ -37,10 +39,15 @@ export function UserCard({ user, onClick, className }: UserCardProps) {
             </StatusBadge>
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
-            <RoleBadge role={user.role} />
-            {user.employeeId && (
+            <RoleBadge role={user.role} label={user.roleLabel} />
+            {user.roles.length > 1 && (
               <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider bg-brand-navy/5 px-1.5 py-0.5 rounded">
-                {user.employeeId}
+                +{user.roles.length - 1} more
+              </span>
+            )}
+            {user.mustChangePassword && (
+              <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider bg-brand-navy/5 px-1.5 py-0.5 rounded">
+                Password reset required
               </span>
             )}
           </div>
@@ -50,12 +57,14 @@ export function UserCard({ user, onClick, className }: UserCardProps) {
               <span className="text-xs truncate">{user.email}</span>
             </div>
             <div className="flex items-center gap-2 text-brand-muted">
-              <Phone size={12} />
-              <span className="text-xs">{user.phone}</span>
+              <AtSign size={12} />
+              <span className="text-xs truncate">{user.userName}</span>
             </div>
             <div className="flex items-center gap-2 text-brand-muted">
-              <MapPin size={12} />
-              <span className="text-xs">Branch: {user.branchId}</span>
+              <Clock3 size={12} />
+              <span className="text-xs">
+                {user.lastLogin ? `Last login ${formatDate(user.lastLogin)}` : `Joined ${formatDate(user.createdAt)}`}
+              </span>
             </div>
           </div>
         </div>

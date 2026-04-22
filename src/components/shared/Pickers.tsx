@@ -45,7 +45,9 @@ export function AdminDropdown({ label, options, value, onChange, placeholder = "
         <DropdownMenuTrigger className={cn(
           "flex h-10 w-full items-center justify-between rounded-[8px] border border-input bg-brand-surface px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-navy transition-all",
           className
-        )}>
+        )}
+        aria-label={label || placeholder}
+        >
           <span className={cn(!selectedOption && "text-muted-foreground")}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
