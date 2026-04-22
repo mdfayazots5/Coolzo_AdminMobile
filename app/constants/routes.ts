@@ -1,0 +1,20 @@
+export const APP_ROUTES = {
+  root: "/",
+  login: "/login",
+  verifyOtp: "/verify-otp",
+  forgotPassword: "/forgot-password",
+  resetPassword: "/reset-password",
+  forgotPin: "/forgot-pin",
+  sessionExpired: "/session-expired",
+  unauthorized: "/unauthorized",
+  dashboard: "/dashboard",
+  serviceRequests: "/service-requests",
+  bookings: "/bookings",
+  customers: "/customers",
+  team: "/team",
+  operations: "/operations/dashboard",
+  notifications: "/notifications",
+  settings: "/settings",
+  profile: "/profile",
+} as const;
+

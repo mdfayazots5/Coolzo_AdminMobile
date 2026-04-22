@@ -7,7 +7,6 @@ import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "@/lib/utils"
 import { UserRole, useAuthStore } from "@/store/auth-store"
-import { NavigationConfig, NavItem } from "@/core/config/navigation-config"
 import { useRBAC } from "@/core/auth/RBACProvider"
 import { authRepository } from "@/core/network/auth-repository"
 import { roleRepository, Role } from "@/core/network/role-repository"
@@ -29,6 +28,7 @@ import {
 import { AdminBottomSheet } from "@/components/shared/Pickers"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { RoleBadge } from "@/components/shared/Badges"
+import { getNavigationForRole } from "../../../app/navigation/menu"
 
 export function AdminScaffold({ children }: { children: React.ReactNode }) {
   const { user, refreshToken, logout } = useAuthStore()
@@ -67,7 +67,7 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
   if (!user) return <>{children}</>
 
   const activeRole = effectiveRole || user.role
-  const navItems = (NavigationConfig[activeRole] || []).filter((item) => canView(item.module))
+  const navItems = getNavigationForRole(activeRole).filter((item) => canView(item.module))
 
   const handleStartViewAsRole = async () => {
     if (!selectedRoleId) return

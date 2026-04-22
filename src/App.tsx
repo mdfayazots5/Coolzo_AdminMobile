@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import AppRouter from './routes';
+import AppRouter from '../app/navigation/router';
 import { Toaster } from '@/components/ui/sonner';
 import { NetworkStatusBanner } from '@/components/shared/NetworkStatusBanner';
 import { MasterDataProvider } from '@/core/master-data/MasterDataProvider';

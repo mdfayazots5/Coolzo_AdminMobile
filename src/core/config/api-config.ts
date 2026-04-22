@@ -18,4 +18,6 @@ export const API_CONFIG = {
   TIMEOUT: EnvConfig.TIMEOUT,
 };
 
+export const IS_MOCK = EnvConfig.MOCK_API;
+
 export const isDemoMode = () => API_CONFIG.DEMO_FLAG;
