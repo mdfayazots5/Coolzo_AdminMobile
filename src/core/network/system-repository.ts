@@ -56,7 +56,7 @@ const buildInitialQueue = (): OfflineSubmission[] => [
   {
     id: 'sub1',
     type: 'job_report',
-    endpoint: '/api/v1/job-reports',
+    endpoint: '/api/job-reports',
     method: 'POST',
     createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
     status: 'failed',
@@ -71,7 +71,7 @@ const buildInitialQueue = (): OfflineSubmission[] => [
   {
     id: 'sub2',
     type: 'part_request',
-    endpoint: '/api/v1/inventory/parts-requests',
+    endpoint: '/api/inventory/parts-requests',
     method: 'POST',
     createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
     status: 'pending',

@@ -173,7 +173,7 @@ export class MockBranchRepository implements BranchRepository {
 
 export class LiveBranchRepository implements BranchRepository {
   async getBranches(filters?: BranchListFilters): Promise<Branch[]> {
-    const response = await apiClient.get<BackendBranch[]>("/api/v1/branches", {
+    const response = await apiClient.get<BackendBranch[]>("/api/branches", {
       params: {
         searchTerm: filters?.searchTerm || undefined,
         isActive: filters?.isActive,
@@ -184,12 +184,12 @@ export class LiveBranchRepository implements BranchRepository {
   }
 
   async getBranchById(id: string): Promise<Branch | null> {
-    const response = await apiClient.get<BackendBranch>(`/api/v1/branches/${id}`);
+    const response = await apiClient.get<BackendBranch>(`/api/branches/${id}`);
     return mapBackendBranch(response.data);
   }
 
   async createBranch(branch: CreateBranchInput): Promise<Branch> {
-    const response = await apiClient.post<BackendBranch>("/api/v1/branches", {
+    const response = await apiClient.post<BackendBranch>("/api/branches", {
       name: branch.name.trim(),
       city: branch.city.trim(),
       address: branch.address.trim(),
@@ -202,7 +202,7 @@ export class LiveBranchRepository implements BranchRepository {
   }
 
   async updateBranch(id: string, branch: UpdateBranchInput): Promise<Branch> {
-    const response = await apiClient.put<BackendBranch>(`/api/v1/branches/${id}`, {
+    const response = await apiClient.put<BackendBranch>(`/api/branches/${id}`, {
       branchId: Number(id),
       name: branch.name.trim(),
       city: branch.city.trim(),

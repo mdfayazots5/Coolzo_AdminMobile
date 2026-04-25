@@ -366,17 +366,17 @@ export class MockPaymentRepository implements PaymentRepository {
 
 export class LivePaymentRepository implements PaymentRepository {
   async getPayments(filters: Record<string, unknown>) {
-    const response = await apiClient.get<Payment[]>("/api/v1/payments", { params: filters });
+    const response = await apiClient.get<Payment[]>("/api/payments", { params: filters });
     return response.data;
   }
 
   async getPaymentById(id: string) {
-    const response = await apiClient.get<Payment>(`/api/v1/payments/${id}`);
+    const response = await apiClient.get<Payment>(`/api/payments/${id}`);
     return response.data;
   }
 
   async verifyCodCollection(id: string, verifierId: string) {
-    const response = await apiClient.post<Payment>("/api/v1/payments/cod-verify", {
+    const response = await apiClient.post<Payment>("/api/payments/cod-verify", {
       paymentId: id,
       verifierId,
     });
@@ -384,72 +384,72 @@ export class LivePaymentRepository implements PaymentRepository {
   }
 
   async refundPayment(id: string) {
-    const response = await apiClient.post<Payment>("/api/v1/payments/refund", { paymentId: id });
+    const response = await apiClient.post<Payment>("/api/payments/refund", { paymentId: id });
     return response.data;
   }
 
   async getUnmatchedPayments() {
-    const response = await apiClient.get<Payment[]>("/api/v1/payments/unmatched");
+    const response = await apiClient.get<Payment[]>("/api/payments/unmatched");
     return response.data;
   }
 
   async matchGatewayPayment(gatewayTransactionId: string, invoiceId: string) {
-    const response = await apiClient.patch<Payment>(`/api/v1/payments/match/${gatewayTransactionId}`, { invoiceId });
+    const response = await apiClient.patch<Payment>(`/api/payments/match/${gatewayTransactionId}`, { invoiceId });
     return response.data;
   }
 
   async getCodPending() {
-    const response = await apiClient.get<Payment[]>("/api/v1/payments/cod-pending");
+    const response = await apiClient.get<Payment[]>("/api/payments/cod-pending");
     return response.data;
   }
 
   async getReceipts() {
-    const response = await apiClient.get<Receipt[]>("/api/v1/receipts");
+    const response = await apiClient.get<Receipt[]>("/api/receipts");
     return response.data;
   }
 
   async resendReceipt(id: string) {
-    await apiClient.post(`/api/v1/receipts/${id}/resend`);
+    await apiClient.post(`/api/receipts/${id}/resend`);
   }
 
   async getFinancialKPIs() {
-    const response = await apiClient.get<FinancialKPIs>("/api/v1/reports/finance-dashboard");
+    const response = await apiClient.get<FinancialKPIs>("/api/reports/finance-dashboard");
     return response.data;
   }
 
   async getRevenueTrend(period: "daily" | "weekly" | "monthly") {
-    const response = await apiClient.get<RevenueDataPoint[]>("/api/v1/reports/revenue", {
+    const response = await apiClient.get<RevenueDataPoint[]>("/api/reports/revenue", {
       params: { period },
     });
     return response.data;
   }
 
   async getRevenueByServiceType() {
-    const response = await apiClient.get<{ type: string; amount: number }[]>("/api/v1/reports/revenue", {
+    const response = await apiClient.get<{ type: string; amount: number }[]>("/api/reports/revenue", {
       params: { breakdown: "serviceType" },
     });
     return response.data;
   }
 
   async getCollectionEfficiency() {
-    const response = await apiClient.get<CollectionEfficiencyPoint[]>("/api/v1/reports/collection-efficiency");
+    const response = await apiClient.get<CollectionEfficiencyPoint[]>("/api/reports/collection-efficiency");
     return response.data;
   }
 
   async getTaxSummary(period: string) {
-    const response = await apiClient.get<TaxSummary>("/api/v1/reports/tax-liability", {
+    const response = await apiClient.get<TaxSummary>("/api/reports/tax-liability", {
       params: { period },
     });
     return response.data;
   }
 
   async getFinancialSummary() {
-    const response = await apiClient.get<FinancialSummary>("/api/v1/reports/financial-summary");
+    const response = await apiClient.get<FinancialSummary>("/api/reports/financial-summary");
     return response.data;
   }
 
   async getDiscountUsage() {
-    const response = await apiClient.get<DiscountUsagePoint[]>("/api/v1/reports/discount-coupon-usage");
+    const response = await apiClient.get<DiscountUsagePoint[]>("/api/reports/discount-coupon-usage");
     return response.data;
   }
 }

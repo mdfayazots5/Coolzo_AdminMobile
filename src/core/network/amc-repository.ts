@@ -317,41 +317,41 @@ export class MockAMCRepository implements AMCRepository {
 
 export class LiveAMCRepository implements AMCRepository {
   async getContracts(filters: any) {
-    const response = await apiClient.get<AMCContract[]>('/api/v1/amc/contracts', { params: filters });
+    const response = await apiClient.get<AMCContract[]>('/api/amc/contracts', { params: filters });
     return response.data;
   }
 
   async getContractById(id: string) {
-    const response = await apiClient.get<AMCContract>(`/api/v1/amc/contracts/${id}`);
+    const response = await apiClient.get<AMCContract>(`/api/amc/contracts/${id}`);
     return response.data;
   }
 
   async enrollContract(contract: Partial<AMCContract>) {
-    const response = await apiClient.post<AMCContract>('/api/v1/amc/contracts/enroll', contract);
+    const response = await apiClient.post<AMCContract>('/api/amc/contracts/enroll', contract);
     return response.data;
   }
 
   async updateContract(id: string, data: Partial<AMCContract>) {
-    const response = await apiClient.put<AMCContract>(`/api/v1/amc/contracts/${id}`, data);
+    const response = await apiClient.put<AMCContract>(`/api/amc/contracts/${id}`, data);
     return response.data;
   }
 
   async cancelContract(id: string) {
-    await apiClient.patch(`/api/v1/amc/contracts/${id}/cancel`);
+    await apiClient.patch(`/api/amc/contracts/${id}/cancel`);
   }
 
   async getVisits(filters: any) {
-    const response = await apiClient.get<AMCVisit[]>('/api/v1/amc/contracts', { params: filters });
+    const response = await apiClient.get<AMCVisit[]>('/api/amc/contracts', { params: filters });
     return response.data;
   }
 
   async getContractVisits(id: string) {
-    const response = await apiClient.get<AMCVisit[]>(`/api/v1/amc/contracts/${id}/visits`);
+    const response = await apiClient.get<AMCVisit[]>(`/api/amc/contracts/${id}/visits`);
     return response.data;
   }
 
   async assignVisit(visitId: string, assignedTechnicianId: string, assignedTechnicianName?: string) {
-    const response = await apiClient.patch<AMCVisit>(`/api/v1/amc/visits/${visitId}/assign`, {
+    const response = await apiClient.patch<AMCVisit>(`/api/amc/visits/${visitId}/assign`, {
       assignedTechnicianId,
       assignedTechnicianName,
     });
@@ -359,7 +359,7 @@ export class LiveAMCRepository implements AMCRepository {
   }
 
   async rescheduleVisit(visitId: string, scheduledDate: string, scheduledSlot: string) {
-    const response = await apiClient.patch<AMCVisit>(`/api/v1/amc/visits/${visitId}/reschedule`, {
+    const response = await apiClient.patch<AMCVisit>(`/api/amc/visits/${visitId}/reschedule`, {
       scheduledDate,
       scheduledSlot,
     });
@@ -367,28 +367,28 @@ export class LiveAMCRepository implements AMCRepository {
   }
 
   async completeVisit(visitId: string, linkedSRId?: string) {
-    const response = await apiClient.patch<AMCVisit>(`/api/v1/amc/visits/${visitId}/complete`, {
+    const response = await apiClient.patch<AMCVisit>(`/api/amc/visits/${visitId}/complete`, {
       linkedSRId,
     });
     return response.data;
   }
 
   async getContractPdfUrl(id: string) {
-    const response = await apiClient.get<{ url: string } | string>(`/api/v1/amc/contracts/${id}/pdf`);
+    const response = await apiClient.get<{ url: string } | string>(`/api/amc/contracts/${id}/pdf`);
     return typeof response.data === 'string' ? response.data : response.data.url;
   }
 
   async getRenewalQueue() {
-    const response = await apiClient.get<AMCContract[]>('/api/v1/amc/renewals');
+    const response = await apiClient.get<AMCContract[]>('/api/amc/renewals');
     return response.data;
   }
 
   async bulkSendRenewalReminders(contractIds: string[]) {
-    await apiClient.post('/api/v1/amc/renewals/bulk-remind', { contractIds });
+    await apiClient.post('/api/amc/renewals/bulk-remind', { contractIds });
   }
 
   async updateRenewalDisposition(id: string, disposition: AMCRenewalDisposition, renewalNotes?: string) {
-    const response = await apiClient.put<AMCContract>(`/api/v1/amc/contracts/${id}`, {
+    const response = await apiClient.put<AMCContract>(`/api/amc/contracts/${id}`, {
       renewalDisposition: disposition,
       renewalNotes,
     });
@@ -396,7 +396,7 @@ export class LiveAMCRepository implements AMCRepository {
   }
 
   async getAMCDashboardStats() {
-    const response = await apiClient.get<AMCDashboardStats>('/api/v1/amc/performance-dashboard');
+    const response = await apiClient.get<AMCDashboardStats>('/api/amc/performance-dashboard');
     return response.data;
   }
 }

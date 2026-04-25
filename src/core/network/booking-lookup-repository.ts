@@ -216,7 +216,7 @@ class MockBookingLookupRepository implements BookingLookupRepository {
 
 class LiveBookingLookupRepository implements BookingLookupRepository {
   async getServices(serviceCategoryId?: string, search?: string): Promise<BookingServiceLookup[]> {
-    const response = await apiClient.get<BackendServiceLookup[]>("/api/v1/booking-lookups/services", {
+    const response = await apiClient.get<BackendServiceLookup[]>("/api/booking-lookups/services", {
       params: {
         serviceCategoryId: serviceCategoryId ? Number(serviceCategoryId) : undefined,
         search: search || undefined,
@@ -227,7 +227,7 @@ class LiveBookingLookupRepository implements BookingLookupRepository {
   }
 
   async getAcTypes(search?: string): Promise<BookingAcTypeLookup[]> {
-    const response = await apiClient.get<BackendAcTypeLookup[]>("/api/v1/booking-lookups/ac-types", {
+    const response = await apiClient.get<BackendAcTypeLookup[]>("/api/booking-lookups/ac-types", {
       params: { search: search || undefined },
     })
 
@@ -235,7 +235,7 @@ class LiveBookingLookupRepository implements BookingLookupRepository {
   }
 
   async getTonnages(search?: string): Promise<BookingTonnageLookup[]> {
-    const response = await apiClient.get<BackendTonnageLookup[]>("/api/v1/booking-lookups/tonnage", {
+    const response = await apiClient.get<BackendTonnageLookup[]>("/api/booking-lookups/tonnage", {
       params: { search: search || undefined },
     })
 
@@ -243,7 +243,7 @@ class LiveBookingLookupRepository implements BookingLookupRepository {
   }
 
   async getBrands(search?: string): Promise<BookingBrandLookup[]> {
-    const response = await apiClient.get<BackendBrandLookup[]>("/api/v1/booking-lookups/brands", {
+    const response = await apiClient.get<BackendBrandLookup[]>("/api/booking-lookups/brands", {
       params: { search: search || undefined },
     })
 
@@ -251,7 +251,7 @@ class LiveBookingLookupRepository implements BookingLookupRepository {
   }
 
   async getZones(search?: string): Promise<BookingZoneLookup[]> {
-    const response = await apiClient.get<BackendZoneLookup[]>("/api/v1/booking-lookups/zones", {
+    const response = await apiClient.get<BackendZoneLookup[]>("/api/booking-lookups/zones", {
       params: { search: search || undefined },
     })
 
@@ -263,12 +263,12 @@ class LiveBookingLookupRepository implements BookingLookupRepository {
       return null
     }
 
-    const response = await apiClient.get<BackendZoneLookup>(`/api/v1/booking-lookups/zones/by-pincode/${pincode.trim()}`)
+    const response = await apiClient.get<BackendZoneLookup>(`/api/booking-lookups/zones/by-pincode/${pincode.trim()}`)
     return response.data ? mapZone(response.data) : null
   }
 
   async getSlots(zoneId: string, slotDate: string): Promise<BookingSlotLookup[]> {
-    const response = await apiClient.get<BackendSlotLookup[]>("/api/v1/booking-lookups/slots", {
+    const response = await apiClient.get<BackendSlotLookup[]>("/api/booking-lookups/slots", {
       params: {
         zoneId: Number(zoneId),
         slotDate,

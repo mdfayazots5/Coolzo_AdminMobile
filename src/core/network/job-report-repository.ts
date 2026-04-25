@@ -180,22 +180,22 @@ import { isDemoMode } from "../config/api-config";
 
 export class LiveJobReportRepository implements JobReportRepository {
   async getJobReports(filters: any) {
-    const response = await apiClient.get<JobReport[]>('/api/v1/job-reports', { params: filters });
+    const response = await apiClient.get<JobReport[]>('/api/job-reports', { params: filters });
     return response.data;
   }
 
   async getJobReportById(id: string) {
-    const response = await apiClient.get<JobReport>(`/api/v1/job-reports/${id}`);
+    const response = await apiClient.get<JobReport>(`/api/job-reports/${id}`);
     return response.data;
   }
 
   async reviewJobReport(id: string, status: 'approved' | 'flagged', notes: string) {
     const endpoint = status === 'approved' ? 'approve' : 'flag';
-    await apiClient.patch(`/api/v1/job-reports/${id}/${endpoint}`, { notes });
+    await apiClient.patch(`/api/job-reports/${id}/${endpoint}`, { notes });
   }
 
   async getQualityMetrics() {
-    const response = await apiClient.get<any>('/api/v1/job-reports/quality-dashboard');
+    const response = await apiClient.get<any>('/api/job-reports/quality-dashboard');
     return response.data;
   }
 }

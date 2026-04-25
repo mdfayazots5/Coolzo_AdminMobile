@@ -321,54 +321,54 @@ import { isDemoMode } from "../config/api-config";
 
 export class LiveEstimateRepository implements EstimateRepository {
   async getEstimates(filters: any) {
-    const response = await apiClient.get<Estimate[]>('/api/v1/estimates', { params: filters });
+    const response = await apiClient.get<Estimate[]>('/api/estimates', { params: filters });
     return response.data;
   }
 
   async getEstimateById(id: string) {
-    const response = await apiClient.get<Estimate>(`/api/v1/estimates/${id}`);
+    const response = await apiClient.get<Estimate>(`/api/estimates/${id}`);
     return response.data;
   }
 
   async createEstimate(estimate: Partial<Estimate>) {
-    const response = await apiClient.post<Estimate>('/api/v1/estimates', estimate);
+    const response = await apiClient.post<Estimate>('/api/estimates', estimate);
     return response.data;
   }
 
   async sendEstimate(id: string) {
-    await apiClient.patch(`/api/v1/estimates/${id}/send`);
+    await apiClient.patch(`/api/estimates/${id}/send`);
   }
 
   async resendEstimate(id: string) {
-    await apiClient.patch(`/api/v1/estimates/${id}/resend`);
+    await apiClient.patch(`/api/estimates/${id}/resend`);
   }
 
   async updateEstimateStatus(id: string, status: 'approved' | 'rejected', reason?: string) {
     const endpoint = status === 'approved' ? 'approve' : 'reject';
-    await apiClient.patch(`/api/v1/estimates/${id}/${endpoint}`, { reason });
+    await apiClient.patch(`/api/estimates/${id}/${endpoint}`, { reason });
   }
 
   async overrideApproveEstimate(id: string, reason?: string) {
-    await apiClient.patch(`/api/v1/estimates/${id}/override-approve`, { reason });
+    await apiClient.patch(`/api/estimates/${id}/override-approve`, { reason });
   }
 
   async getEstimateExpiryQueue() {
-    const response = await apiClient.get<Estimate[]>('/api/v1/estimates/expiry-queue');
+    const response = await apiClient.get<Estimate[]>('/api/estimates/expiry-queue');
     return response.data;
   }
 
   async getWorkOrders(filters: any) {
-    const response = await apiClient.get<WorkOrder[]>('/api/v1/work-orders', { params: filters });
+    const response = await apiClient.get<WorkOrder[]>('/api/work-orders', { params: filters });
     return response.data;
   }
 
   async getWorkOrderById(id: string) {
-    const response = await apiClient.get<WorkOrder>(`/api/v1/work-orders/${id}`);
+    const response = await apiClient.get<WorkOrder>(`/api/work-orders/${id}`);
     return response.data;
   }
 
   async createWorkOrderFromEstimate(estimateId: string) {
-    const response = await apiClient.post<WorkOrder>(`/api/v1/work-orders/from-estimate/${estimateId}`);
+    const response = await apiClient.post<WorkOrder>(`/api/work-orders/from-estimate/${estimateId}`);
     return response.data;
   }
 }

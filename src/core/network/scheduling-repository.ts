@@ -897,7 +897,7 @@ class MockSchedulingRepository implements SchedulingRepository {
 
 class LiveSchedulingRepository implements SchedulingRepository {
   async getBoard(filters: SchedulingBoardFilters): Promise<SchedulingBoard> {
-    const response = await apiClient.get<BackendSchedulingBoard>("/api/v1/scheduling/board", {
+    const response = await apiClient.get<BackendSchedulingBoard>("/api/scheduling/board", {
       params: {
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
@@ -917,7 +917,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async assignJob(input: SchedulingJobMutationInput): Promise<SchedulingJob> {
-    const response = await apiClient.post<BackendSchedulingJob>("/api/v1/scheduling/assign", {
+    const response = await apiClient.post<BackendSchedulingJob>("/api/scheduling/assign", {
       serviceRequestId: Number(input.serviceRequestId),
       technicianId: Number(input.technicianId),
       slotAvailabilityId: Number(input.slotAvailabilityId),
@@ -928,7 +928,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async reassignJob(input: SchedulingJobMutationInput): Promise<SchedulingJob> {
-    const response = await apiClient.put<BackendSchedulingJob>("/api/v1/scheduling/reassign", {
+    const response = await apiClient.put<BackendSchedulingJob>("/api/scheduling/reassign", {
       serviceRequestId: Number(input.serviceRequestId),
       technicianId: Number(input.technicianId),
       slotAvailabilityId: Number(input.slotAvailabilityId),
@@ -939,7 +939,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async getAmcAuto(dateFrom?: string, dateTo?: string): Promise<SchedulingAmcAutoVisit[]> {
-    const response = await apiClient.get<BackendSchedulingAmcAutoVisit[]>("/api/v1/scheduling/amc-auto", {
+    const response = await apiClient.get<BackendSchedulingAmcAutoVisit[]>("/api/scheduling/amc-auto", {
       params: {
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
@@ -950,7 +950,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async bulkAssignAmc(input: SchedulingBulkAmcAssignInput): Promise<SchedulingJob[]> {
-    const response = await apiClient.post<BackendSchedulingJob[]>("/api/v1/scheduling/amc-bulk-assign", {
+    const response = await apiClient.post<BackendSchedulingJob[]>("/api/scheduling/amc-bulk-assign", {
       technicianId: Number(input.technicianId),
       visits: input.visits.map((visit) => ({
         amcVisitScheduleId: Number(visit.amcVisitScheduleId),
@@ -963,7 +963,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async getConflicts(serviceRequestId: string, technicianId: string, slotAvailabilityId: string): Promise<SchedulingConflict[]> {
-    const response = await apiClient.get<BackendSchedulingConflict[]>("/api/v1/scheduling/conflicts", {
+    const response = await apiClient.get<BackendSchedulingConflict[]>("/api/scheduling/conflicts", {
       params: {
         serviceRequestId: Number(serviceRequestId),
         technicianId: Number(technicianId),
@@ -975,7 +975,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async getSlots(zoneId: string, slotDate: string): Promise<SchedulingSlot[]> {
-    const response = await apiClient.get<BackendSchedulingSlot[]>("/api/v1/scheduling/slots", {
+    const response = await apiClient.get<BackendSchedulingSlot[]>("/api/scheduling/slots", {
       params: {
         zoneId: Number(zoneId),
         slotDate,
@@ -986,7 +986,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async updateSlot(slotAvailabilityId: string, input: { isBlocked: boolean; availableCapacity?: number }): Promise<SchedulingSlot> {
-    const response = await apiClient.put<BackendSchedulingSlot>(`/api/v1/scheduling/slots/${Number(slotAvailabilityId)}`, {
+    const response = await apiClient.put<BackendSchedulingSlot>(`/api/scheduling/slots/${Number(slotAvailabilityId)}`, {
       isBlocked: input.isBlocked,
       availableCapacity: input.availableCapacity,
     });
@@ -995,7 +995,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async getTechnicianShifts(technicianId?: string): Promise<SchedulingShift[]> {
-    const response = await apiClient.get<BackendSchedulingShift[]>("/api/v1/scheduling/shifts", {
+    const response = await apiClient.get<BackendSchedulingShift[]>("/api/scheduling/shifts", {
       params: { technicianId: technicianId ? Number(technicianId) : undefined },
     });
 
@@ -1003,7 +1003,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async updateTechnicianShifts(input: SchedulingShiftUpdateInput): Promise<SchedulingShift> {
-    const response = await apiClient.put<BackendSchedulingShift>("/api/v1/scheduling/shifts", {
+    const response = await apiClient.put<BackendSchedulingShift>("/api/scheduling/shifts", {
       technicianId: Number(input.technicianId),
       days: input.days.map((day) => ({
         dayOfWeekNumber: day.dayOfWeekNumber,
@@ -1019,7 +1019,7 @@ class LiveSchedulingRepository implements SchedulingRepository {
   }
 
   async getDaySheet(scheduleDate: string, technicianId?: string): Promise<SchedulingDaySheet> {
-    const response = await apiClient.get<BackendSchedulingDaySheet>("/api/v1/scheduling/day-sheet", {
+    const response = await apiClient.get<BackendSchedulingDaySheet>("/api/scheduling/day-sheet", {
       params: {
         scheduleDate,
         technicianId: technicianId ? Number(technicianId) : undefined,

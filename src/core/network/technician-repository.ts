@@ -735,7 +735,7 @@ class MockTechnicianRepository implements TechnicianRepository {
 
 class LiveTechnicianRepository implements TechnicianRepository {
   async getTechnicians(filters: TechnicianFilters = {}) {
-    const response = await apiClient.get<BackendTechnicianListItem[]>("/api/v1/technicians", {
+    const response = await apiClient.get<BackendTechnicianListItem[]>("/api/technicians", {
       params: {
         searchTerm: filters.searchTerm || filters.search || undefined,
         activeOnly: typeof filters.activeOnly === "boolean" ? filters.activeOnly : false,
@@ -750,7 +750,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async getTechnicianById(id: string) {
-    const response = await apiClient.get<BackendTechnicianDetail>(`/api/v1/technicians/${Number(id)}`);
+    const response = await apiClient.get<BackendTechnicianDetail>(`/api/technicians/${Number(id)}`);
     const [performance, attendance, gpsLog] = await Promise.all([
       this.getTechnicianPerformance(id),
       this.getTechnicianAttendance(id),
@@ -775,7 +775,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async createTechnician(input: CreateTechnicianInput) {
-    const response = await apiClient.post<BackendTechnicianDetail>("/api/v1/technicians", {
+    const response = await apiClient.post<BackendTechnicianDetail>("/api/technicians", {
       technicianName: input.name.trim(),
       mobileNumber: input.phone.trim(),
       emailAddress: input.email?.trim() || null,
@@ -789,7 +789,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async updateTechnician(id: string, input: UpdateTechnicianInput) {
-    const response = await apiClient.put<BackendTechnicianDetail>(`/api/v1/technicians/${Number(id)}`, {
+    const response = await apiClient.put<BackendTechnicianDetail>(`/api/technicians/${Number(id)}`, {
       technicianName: input.name.trim(),
       mobileNumber: input.phone.trim(),
       emailAddress: input.email?.trim() || null,
@@ -802,7 +802,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async updateSkills(id: string, skills: TechnicianSkillInput[]) {
-    const response = await apiClient.patch<BackendTechnicianSkill[]>(`/api/v1/technicians/${Number(id)}/skills`, {
+    const response = await apiClient.patch<BackendTechnicianSkill[]>(`/api/technicians/${Number(id)}/skills`, {
       skills: skills.map(toBackendSkill),
     });
 
@@ -810,7 +810,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async updateZones(id: string, zoneIds: string[], primaryZoneId?: string) {
-    const response = await apiClient.patch<BackendTechnicianZone[]>(`/api/v1/technicians/${Number(id)}/zones`, {
+    const response = await apiClient.patch<BackendTechnicianZone[]>(`/api/technicians/${Number(id)}/zones`, {
       zoneIds: zoneIds.map((zoneId) => Number(zoneId)),
       primaryZoneId: primaryZoneId ? Number(primaryZoneId) : null,
     });
@@ -824,7 +824,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async getTechnicianPerformance(id: string, fromDate?: string, toDate?: string) {
-    const response = await apiClient.get<BackendTechnicianPerformance>(`/api/v1/technicians/${Number(id)}/performance`, {
+    const response = await apiClient.get<BackendTechnicianPerformance>(`/api/technicians/${Number(id)}/performance`, {
       params: {
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
@@ -835,7 +835,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async getTechnicianAttendance(id: string, year?: number, month?: number) {
-    const response = await apiClient.get<BackendTechnicianAttendance[]>(`/api/v1/technicians/${Number(id)}/attendance`, {
+    const response = await apiClient.get<BackendTechnicianAttendance[]>(`/api/technicians/${Number(id)}/attendance`, {
       params: {
         year: year || undefined,
         month: month || undefined,
@@ -846,7 +846,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async requestLeave(id: string, input: LeaveRequestInput) {
-    const response = await apiClient.post<BackendTechnicianAttendance>(`/api/v1/technicians/${Number(id)}/attendance/leave`, {
+    const response = await apiClient.post<BackendTechnicianAttendance>(`/api/technicians/${Number(id)}/attendance/leave`, {
       leaveDate: input.leaveDate,
       leaveReason: input.leaveReason || null,
     });
@@ -855,7 +855,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async reviewLeave(id: string, leaveRequestId: string, input: LeaveReviewInput) {
-    const response = await apiClient.patch<BackendTechnicianAttendance>(`/api/v1/technicians/${Number(id)}/attendance/leave/${Number(leaveRequestId)}`, {
+    const response = await apiClient.patch<BackendTechnicianAttendance>(`/api/technicians/${Number(id)}/attendance/leave/${Number(leaveRequestId)}`, {
       decision: input.decision,
       remarks: input.remarks || null,
     });
@@ -864,7 +864,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async getAvailabilityBoard(serviceRequestId?: string) {
-    const response = await apiClient.get<BackendTechnicianListItem[]>("/api/v1/technicians/availability-board", {
+    const response = await apiClient.get<BackendTechnicianListItem[]>("/api/technicians/availability-board", {
       params: {
         serviceRequestId: serviceRequestId ? Number(serviceRequestId) : undefined,
       },
@@ -874,7 +874,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async getGpsLog(id: string, trackingDate: string) {
-    const response = await apiClient.get<BackendTechnicianGpsLog[]>(`/api/v1/technicians/${Number(id)}/gps-log`, {
+    const response = await apiClient.get<BackendTechnicianGpsLog[]>(`/api/technicians/${Number(id)}/gps-log`, {
       params: { trackingDate },
     });
 
@@ -882,7 +882,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async getHelpers(searchTerm?: string) {
-    const response = await apiClient.get<BackendHelperProfile[]>("/api/v1/helpers", {
+    const response = await apiClient.get<BackendHelperProfile[]>("/api/helpers", {
       params: { searchTerm: searchTerm || undefined },
     });
 
@@ -890,7 +890,7 @@ class LiveTechnicianRepository implements TechnicianRepository {
   }
 
   async updateHelper(id: string, input: HelperUpdateInput) {
-    const response = await apiClient.put<BackendHelperProfile>(`/api/v1/helpers/${Number(id)}`, {
+    const response = await apiClient.put<BackendHelperProfile>(`/api/helpers/${Number(id)}`, {
       helperCode: input.code.trim(),
       helperName: input.name.trim(),
       mobileNo: input.mobileNo.trim(),

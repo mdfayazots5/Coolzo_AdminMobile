@@ -87,7 +87,7 @@ export default function MyJobsList() {
         </button>
         <div>
           <h1 className="text-xl font-bold text-brand-navy">My field jobs</h1>
-          <p className="text-sm text-brand-muted">Phase 10 live queue backed by `/api/v1/field`.</p>
+          <p className="text-sm text-brand-muted">Phase 10 live queue backed by `/api/field`.</p>
         </div>
       </div>
 

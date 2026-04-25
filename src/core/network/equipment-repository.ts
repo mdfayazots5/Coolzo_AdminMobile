@@ -156,32 +156,32 @@ export class MockEquipmentRepository implements EquipmentRepository {
 
 export class LiveEquipmentRepository implements EquipmentRepository {
   async getEquipment(filters: any) {
-    const response = await apiClient.get<Equipment[]>('/api/v1/equipment', { params: filters });
+    const response = await apiClient.get<Equipment[]>('/api/equipment', { params: filters });
     return response.data;
   }
 
   async getEquipmentById(id: string) {
-    const response = await apiClient.get<Equipment>(`/api/v1/equipment/${id}`);
+    const response = await apiClient.get<Equipment>(`/api/equipment/${id}`);
     return response.data;
   }
 
   async getEquipmentByCustomerId(customerId: string) {
-    const response = await apiClient.get<Equipment[]>(`/api/v1/customers/${customerId}/equipment`);
+    const response = await apiClient.get<Equipment[]>(`/api/customers/${customerId}/equipment`);
     return response.data;
   }
 
   async addEquipment(equipment: Partial<Equipment>) {
-    const response = await apiClient.post<Equipment>('/api/v1/equipment', equipment);
+    const response = await apiClient.post<Equipment>('/api/equipment', equipment);
     return response.data;
   }
 
   async updateEquipment(id: string, data: Partial<Equipment>) {
-    const response = await apiClient.patch<Equipment>(`/api/v1/equipment/${id}`, data);
+    const response = await apiClient.patch<Equipment>(`/api/equipment/${id}`, data);
     return response.data;
   }
 
   async getWarrantyRecords(filters: any) {
-    const response = await apiClient.get<WarrantyRecord[]>('/api/v1/warranty/records', { params: filters });
+    const response = await apiClient.get<WarrantyRecord[]>('/api/warranty/records', { params: filters });
     return response.data;
   }
 }

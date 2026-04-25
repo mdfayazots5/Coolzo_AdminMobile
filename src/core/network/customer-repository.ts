@@ -689,7 +689,7 @@ export class MockCustomerRepository implements CustomerRepository {
 
 export class LiveCustomerRepository implements CustomerRepository {
   async getCustomers(filters: any) {
-    const response = await apiClient.get<BackendCustomerListItem[]>("/api/v1/customers", {
+    const response = await apiClient.get<BackendCustomerListItem[]>("/api/customers", {
       params: {
         searchTerm: filters?.searchTerm ?? filters?.search ?? undefined,
         pageNumber: filters?.pageNumber ?? 1,
@@ -701,21 +701,21 @@ export class LiveCustomerRepository implements CustomerRepository {
   }
 
   async getCustomerById(id: string) {
-    const detailResponse = await apiClient.get<BackendCustomerDetail>(`/api/v1/customers/${id}`);
+    const detailResponse = await apiClient.get<BackendCustomerDetail>(`/api/customers/${id}`);
     const detail = detailResponse.data;
 
     const [historyResponse, amcResponse, preferenceResponse, ticketsResponse, invoicesResponse] = await Promise.all([
-      apiClient.get<BackendServiceHistoryItem[]>(`/api/v1/service-history/customer/${id}`),
-      apiClient.get<BackendCustomerAmc[]>(`/api/v1/amc/customer/${id}`),
-      apiClient.get<BackendCommunicationPreference>(`/api/v1/communication-preferences/customer/${id}`).catch(() => ({ data: null as BackendCommunicationPreference | null })),
-      apiClient.get<BackendSupportTicketListItem[]>("/api/v1/support-tickets", {
+      apiClient.get<BackendServiceHistoryItem[]>(`/api/service-history/customer/${id}`),
+      apiClient.get<BackendCustomerAmc[]>(`/api/amc/customer/${id}`),
+      apiClient.get<BackendCommunicationPreference>(`/api/communication-preferences/customer/${id}`).catch(() => ({ data: null as BackendCommunicationPreference | null })),
+      apiClient.get<BackendSupportTicketListItem[]>("/api/support-tickets", {
         params: {
           customerMobile: detail.mobileNumber,
           pageNumber: 1,
           pageSize: 10,
         },
       }),
-      apiClient.get<BackendInvoiceListItem[]>("/api/v1/invoices", {
+      apiClient.get<BackendInvoiceListItem[]>("/api/invoices", {
         params: {
           customerId: Number(id),
           pageNumber: 1,
@@ -740,7 +740,7 @@ export class LiveCustomerRepository implements CustomerRepository {
       customerName: string;
       mobileNumber: string;
       emailAddress: string;
-    }>("/api/v1/customers", {
+    }>("/api/customers", {
       customerName: data.name ?? "",
       mobileNumber: data.phone ?? "",
       emailAddress: data.email ?? "",
@@ -764,7 +764,7 @@ export class LiveCustomerRepository implements CustomerRepository {
   }
 
   async updateCustomer(id: string, data: Partial<Customer>) {
-    await apiClient.put<BackendCustomerDetail>(`/api/v1/customers/${id}`, {
+    await apiClient.put<BackendCustomerDetail>(`/api/customers/${id}`, {
       customerName: data.name ?? "",
       mobileNumber: data.phone ?? "",
       emailAddress: data.email ?? "",
@@ -784,7 +784,7 @@ export class LiveCustomerRepository implements CustomerRepository {
         ? Number(address.zoneId)
         : null;
 
-    await apiClient.post(`/api/v1/customers/${customerId}/addresses`, {
+    await apiClient.post(`/api/customers/${customerId}/addresses`, {
       addressLabel: address.label ?? "Primary",
       addressLine1: address.addressLine ?? "",
       addressLine2: "",
@@ -801,7 +801,7 @@ export class LiveCustomerRepository implements CustomerRepository {
   }
 
   async addEquipment(customerId: string, equipment: Partial<CustomerEquipment>) {
-    await apiClient.post(`/api/v1/customers/${customerId}/equipment`, {
+    await apiClient.post(`/api/customers/${customerId}/equipment`, {
       name: equipment.model ?? "",
       type: equipment.type ?? "",
       brand: equipment.brand ?? "",
@@ -814,7 +814,7 @@ export class LiveCustomerRepository implements CustomerRepository {
   }
 
   async addNote(customerId: string, content: string) {
-    const response = await apiClient.post<BackendCustomerNote>(`/api/v1/customers/${customerId}/notes`, {
+    const response = await apiClient.post<BackendCustomerNote>(`/api/customers/${customerId}/notes`, {
       content,
       isPrivate: true,
       noteType: "Internal",

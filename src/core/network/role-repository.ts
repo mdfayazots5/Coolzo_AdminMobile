@@ -126,7 +126,7 @@ export class MockRoleRepository implements RoleRepository {
 
 export class LiveRoleRepository implements RoleRepository {
   async getRoles(): Promise<Role[]> {
-    const response = await apiClient.get<BackendRole[]>('/api/v1/roles', {
+    const response = await apiClient.get<BackendRole[]>('/api/roles', {
       params: { pageNumber: 1, pageSize: 200 },
     });
     return response.data.map(mapBackendRoleResponse);
@@ -135,7 +135,7 @@ export class LiveRoleRepository implements RoleRepository {
   async getRoleById(id: string): Promise<Role | null> {
     const [roles, response] = await Promise.all([
       this.getRoles(),
-      apiClient.get<BackendRolePermissionSnapshot>(`/api/v1/roles/${id}/permissions`),
+      apiClient.get<BackendRolePermissionSnapshot>(`/api/roles/${id}/permissions`),
     ]);
 
     const existingRole = roles.find((role) => role.id === id);
@@ -154,7 +154,7 @@ export class LiveRoleRepository implements RoleRepository {
   async createRole(role: Partial<Role>): Promise<Role> {
     const permissionIds = await resolvePermissionIds(role.permissions || {});
     const displayName = role.name || 'Custom Role';
-    const response = await apiClient.post<BackendRole>('/api/v1/roles', {
+    const response = await apiClient.post<BackendRole>('/api/roles', {
       roleName: toRoleName(displayName),
       displayName,
       description: role.description || '',
@@ -167,7 +167,7 @@ export class LiveRoleRepository implements RoleRepository {
 
   async updateRole(id: string, role: Partial<Role>): Promise<Role> {
     const permissionIds = await resolvePermissionIds(role.permissions || {});
-    const response = await apiClient.put<BackendRole>(`/api/v1/roles/${id}/permissions`, {
+    const response = await apiClient.put<BackendRole>(`/api/roles/${id}/permissions`, {
       permissionIds,
     });
 
@@ -262,7 +262,7 @@ const resolvePermissionIds = async (permissionSet: PermissionSet): Promise<numbe
     return [];
   }
 
-  const response = await apiClient.get<BackendPermissionCatalogItem[]>('/api/v1/permissions', {
+  const response = await apiClient.get<BackendPermissionCatalogItem[]>('/api/permissions', {
     params: { pageNumber: 1, pageSize: 200 },
   });
 

@@ -434,7 +434,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
       }
     }
 
-    const response = await apiClient.get<BackendDynamicMasterRecord[]>(`/api/v1/master/${slug}`, {
+    const response = await apiClient.get<BackendDynamicMasterRecord[]>(`/api/master/${slug}`, {
       params: {
         search: options?.search || undefined,
         isActive: options?.isActive,
@@ -450,7 +450,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async createMasterRecord(slug: MasterDataSlug, input: MasterDataRecordInput): Promise<MasterDataRecord> {
-    const response = await apiClient.post<BackendDynamicMasterRecord>(`/api/v1/master/${slug}`, {
+    const response = await apiClient.post<BackendDynamicMasterRecord>(`/api/master/${slug}`, {
       dynamicMasterRecordId: input.id ? Number(input.id) : null,
       masterCode: input.code.trim(),
       masterLabel: input.label.trim(),
@@ -465,7 +465,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async updateMasterRecord(slug: MasterDataSlug, input: MasterDataRecordInput): Promise<MasterDataRecord> {
-    const response = await apiClient.put<BackendDynamicMasterRecord>(`/api/v1/master/${slug}`, {
+    const response = await apiClient.put<BackendDynamicMasterRecord>(`/api/master/${slug}`, {
       dynamicMasterRecordId: input.id ? Number(input.id) : null,
       masterCode: input.code.trim(),
       masterLabel: input.label.trim(),
@@ -480,7 +480,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async deleteMasterRecord(slug: MasterDataSlug, id: string): Promise<void> {
-    await apiClient.delete(`/api/v1/master/${slug}`, {
+    await apiClient.delete(`/api/master/${slug}`, {
       params: { dynamicMasterRecordId: Number(id) },
     })
     this.invalidateMasterData(slug)
@@ -494,7 +494,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
       }
     }
 
-    const response = await apiClient.get<BackendSystemConfigurationRecord[]>(`/api/v1/config/${slug}`)
+    const response = await apiClient.get<BackendSystemConfigurationRecord[]>(`/api/config/${slug}`)
     const records = response.data.map((record) => mapConfigurationRecord(slug, record))
     const cache = readConfigurationCache()
     cache[slug] = records
@@ -504,7 +504,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async createConfigurationRecord(slug: ConfigurationGroupSlug, input: ConfigurationRecordInput): Promise<ConfigurationRecord> {
-    const response = await apiClient.post<BackendSystemConfigurationRecord>(`/api/v1/config/${slug}`, {
+    const response = await apiClient.post<BackendSystemConfigurationRecord>(`/api/config/${slug}`, {
       systemConfigurationId: input.id ? Number(input.id) : null,
       configurationKey: input.key.trim(),
       configurationValue: toRawValue(input.metadata),
@@ -518,7 +518,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async updateConfigurationRecord(slug: ConfigurationGroupSlug, input: ConfigurationRecordInput): Promise<ConfigurationRecord> {
-    const response = await apiClient.put<BackendSystemConfigurationRecord>(`/api/v1/config/${slug}`, {
+    const response = await apiClient.put<BackendSystemConfigurationRecord>(`/api/config/${slug}`, {
       systemConfigurationId: input.id ? Number(input.id) : null,
       configurationKey: input.key.trim(),
       configurationValue: toRawValue(input.metadata),
@@ -539,7 +539,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
       }
     }
 
-    const response = await apiClient.get<BackendBusinessHourRecord[]>("/api/v1/config/business-hours")
+    const response = await apiClient.get<BackendBusinessHourRecord[]>("/api/config/business-hours")
     const records = response.data.map(mapBusinessHourRecord)
     const cache = readConfigurationCache()
     cache["business-hours"] = records
@@ -549,7 +549,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async saveBusinessHours(records: BusinessHourRecord[]): Promise<BusinessHourRecord[]> {
-    const response = await apiClient.put<BackendBusinessHourRecord[]>("/api/v1/config/business-hours", {
+    const response = await apiClient.put<BackendBusinessHourRecord[]>("/api/config/business-hours", {
       businessHours: records.map((record) => ({
         dayOfWeekNumber: record.dayOfWeekNumber,
         startTimeLocal: record.startTimeLocal || null,
@@ -572,7 +572,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
       }
     }
 
-    const response = await apiClient.get<BackendHolidayRecord[]>("/api/v1/holidays")
+    const response = await apiClient.get<BackendHolidayRecord[]>("/api/holidays")
     const records = response.data.map(mapHolidayRecord)
     const cache = readConfigurationCache()
     cache["holidays"] = records
@@ -581,7 +581,7 @@ class LiveMasterDataRepository implements MasterDataRepository {
   }
 
   async createHoliday(input: HolidayRecordInput): Promise<HolidayRecord> {
-    const response = await apiClient.post<BackendHolidayRecord>("/api/v1/holidays", {
+    const response = await apiClient.post<BackendHolidayRecord>("/api/holidays", {
       holidayDate: input.holidayDate,
       holidayName: input.holidayName,
       isRecurringAnnually: input.isRecurringAnnually,

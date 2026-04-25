@@ -727,22 +727,22 @@ export class MockInvoiceRepository implements InvoiceRepository {
 
 export class LiveInvoiceRepository implements InvoiceRepository {
   async getInvoices(filters: InvoiceListFilters) {
-    const response = await apiClient.get<BackendInvoiceListItem[]>("/api/v1/invoices", { params: filters });
+    const response = await apiClient.get<BackendInvoiceListItem[]>("/api/invoices", { params: filters });
     return response.data.map(mapBackendInvoiceListItem);
   }
 
   async getInvoiceById(id: string) {
-    const response = await apiClient.get<BackendInvoiceDetail>(`/api/v1/invoices/${id}`);
+    const response = await apiClient.get<BackendInvoiceDetail>(`/api/invoices/${id}`);
     return mapBackendInvoiceDetail(response.data);
   }
 
   async createInvoice(invoice: Partial<Invoice>) {
-    const response = await apiClient.post<Invoice>("/api/v1/invoices", invoice);
+    const response = await apiClient.post<Invoice>("/api/invoices", invoice);
     return response.data;
   }
 
   async updateInvoice(id: string, data: Partial<Invoice>, changeReason: string) {
-    const response = await apiClient.put<Invoice>(`/api/v1/invoices/${id}`, {
+    const response = await apiClient.put<Invoice>(`/api/invoices/${id}`, {
       ...data,
       changeReason,
     });
@@ -750,56 +750,56 @@ export class LiveInvoiceRepository implements InvoiceRepository {
   }
 
   async sendInvoice(id: string) {
-    const response = await apiClient.patch<Invoice>(`/api/v1/invoices/${id}/send`);
+    const response = await apiClient.patch<Invoice>(`/api/invoices/${id}/send`);
     return response.data;
   }
 
   async applyDiscount(id: string, discount: ManualDiscountRequest) {
-    const response = await apiClient.patch<Invoice>(`/api/v1/invoices/${id}/apply-discount`, discount);
+    const response = await apiClient.patch<Invoice>(`/api/invoices/${id}/apply-discount`, discount);
     return response.data;
   }
 
   async issueCreditNote(id: string, payload: { amount: number; reason: string }) {
-    const response = await apiClient.post<Invoice>(`/api/v1/invoices/${id}/credit-note`, payload);
+    const response = await apiClient.post<Invoice>(`/api/invoices/${id}/credit-note`, payload);
     return response.data;
   }
 
   async markAsPaid(id: string, payment: MarkInvoicePaidRequest) {
-    const response = await apiClient.patch<Invoice>(`/api/v1/invoices/${id}/mark-paid`, payment);
+    const response = await apiClient.patch<Invoice>(`/api/invoices/${id}/mark-paid`, payment);
     return response.data;
   }
 
   async getVersionHistory(id: string) {
-    const response = await apiClient.get<InvoiceVersionEntry[]>(`/api/v1/invoices/${id}/version-history`);
+    const response = await apiClient.get<InvoiceVersionEntry[]>(`/api/invoices/${id}/version-history`);
     return response.data;
   }
 
   async getAccountsReceivableDashboard() {
-    const response = await apiClient.get<AccountsReceivableDashboard>("/api/v1/billing/accounts-receivable");
+    const response = await apiClient.get<AccountsReceivableDashboard>("/api/billing/accounts-receivable");
     return response.data;
   }
 
   async sendPaymentReminder(id: string) {
-    await apiClient.post("/api/v1/billing/payment-reminders/send", { invoiceId: id });
+    await apiClient.post("/api/billing/payment-reminders/send", { invoiceId: id });
   }
 
   async bulkExportInvoices(request: ExportInvoicesRequest) {
-    const response = await apiClient.post<{ downloadUrl: string }>("/api/v1/billing/invoices/bulk-export", request);
+    const response = await apiClient.post<{ downloadUrl: string }>("/api/billing/invoices/bulk-export", request);
     return response.data;
   }
 
   async createCorporateInvoice(accountId: string) {
-    const response = await apiClient.post<Invoice>(`/api/v1/billing/corporate-invoice/${accountId}`);
+    const response = await apiClient.post<Invoice>(`/api/billing/corporate-invoice/${accountId}`);
     return response.data;
   }
 
   async createProformaInvoice(customerId: string) {
-    const response = await apiClient.post<Invoice>(`/api/v1/billing/proforma/${customerId}`);
+    const response = await apiClient.post<Invoice>(`/api/billing/proforma/${customerId}`);
     return response.data;
   }
 
   async markBadDebt(id: string) {
-    const response = await apiClient.patch<Invoice>(`/api/v1/billing/invoices/${id}/bad-debt`);
+    const response = await apiClient.patch<Invoice>(`/api/billing/invoices/${id}/bad-debt`);
     return response.data;
   }
 }

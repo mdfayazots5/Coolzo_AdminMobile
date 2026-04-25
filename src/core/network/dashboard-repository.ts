@@ -49,7 +49,7 @@ export class MockDashboardRepository implements DashboardRepository {
 
 export class LiveDashboardRepository implements DashboardRepository {
   async getStats() {
-    const response = await apiClient.get<DashboardStats>('/api/v1/dashboard/stats');
+    const response = await apiClient.get<DashboardStats>('/api/dashboard/stats');
     return response.data;
   }
 }

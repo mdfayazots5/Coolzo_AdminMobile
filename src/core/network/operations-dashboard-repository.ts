@@ -577,7 +577,7 @@ export class MockOperationsDashboardRepository implements OperationsDashboardRep
 
 export class LiveOperationsDashboardRepository implements OperationsDashboardRepository {
   async getDashboardSummary(): Promise<OperationsDashboardSummary> {
-    const response = await apiClient.get<BackendOperationsDashboardSummary>("/api/v1/dashboard/operations");
+    const response = await apiClient.get<BackendOperationsDashboardSummary>("/api/dashboard/operations");
 
     return {
       totalJobs: response.data.totalJobs,
@@ -594,27 +594,27 @@ export class LiveOperationsDashboardRepository implements OperationsDashboardRep
   }
 
   async getPendingQueue(): Promise<OperationsPendingQueueItem[]> {
-    const response = await apiClient.get<BackendOperationsPendingQueueItem[]>("/api/v1/dashboard/operations/pending-queue");
+    const response = await apiClient.get<BackendOperationsPendingQueueItem[]>("/api/dashboard/operations/pending-queue");
     return response.data.map(mapPendingQueueItem);
   }
 
   async getTechnicianStatus(): Promise<OperationsTechnicianStatus[]> {
-    const response = await apiClient.get<BackendOperationsTechnicianStatusItem[]>("/api/v1/dashboard/operations/technician-status");
+    const response = await apiClient.get<BackendOperationsTechnicianStatusItem[]>("/api/dashboard/operations/technician-status");
     return response.data.map(mapTechnicianStatus);
   }
 
   async getSlaAlerts(): Promise<OperationsSlaAlert[]> {
-    const response = await apiClient.get<BackendOperationsSlaAlertItem[]>("/api/v1/dashboard/operations/sla-alerts");
+    const response = await apiClient.get<BackendOperationsSlaAlertItem[]>("/api/dashboard/operations/sla-alerts");
     return response.data.map(mapSlaAlert);
   }
 
   async getZoneWorkload(): Promise<OperationsZoneWorkload[]> {
-    const response = await apiClient.get<BackendOperationsZoneWorkloadItem[]>("/api/v1/dashboard/operations/zone-workload");
+    const response = await apiClient.get<BackendOperationsZoneWorkloadItem[]>("/api/dashboard/operations/zone-workload");
     return response.data.map(mapZoneWorkload);
   }
 
   async getDaySummary(): Promise<OperationsDaySummary> {
-    const response = await apiClient.get<BackendOperationsDaySummary>("/api/v1/dashboard/operations/day-summary");
+    const response = await apiClient.get<BackendOperationsDaySummary>("/api/dashboard/operations/day-summary");
 
     return {
       summaryDate: response.data.summaryDate,
@@ -637,7 +637,7 @@ export class LiveOperationsDashboardRepository implements OperationsDashboardRep
   }
 
   async getLiveMap(): Promise<OperationsLiveMap> {
-    const response = await apiClient.get<BackendOperationsLiveMap>("/api/v1/dashboard/live-map");
+    const response = await apiClient.get<BackendOperationsLiveMap>("/api/dashboard/live-map");
 
     return {
       generatedAt: response.data.generatedOnUtc,

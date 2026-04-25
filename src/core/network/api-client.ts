@@ -106,9 +106,9 @@ apiClient.interceptors.response.use(
       error.response?.status !== 401 ||
       !request ||
       request._skipAuthRefresh ||
-      request.url?.includes('/api/v1/auth/login') ||
-      request.url?.includes('/api/v1/auth/refresh') ||
-      request.url?.includes('/api/v1/auth/refresh-token')
+      request.url?.includes('/api/auth/login') ||
+      request.url?.includes('/api/auth/refresh') ||
+      request.url?.includes('/api/auth/refresh-token')
     ) {
       return Promise.reject(error);
     }
@@ -130,7 +130,7 @@ apiClient.interceptors.response.use(
 
     if (!refreshPromise) {
       refreshPromise = axios.post(
-        `${API_CONFIG.BASE_URL}/api/v1/auth/refresh-token`,
+        `${API_CONFIG.BASE_URL}/api/auth/refresh-token`,
         { accessToken, refreshToken },
         {
           timeout: API_CONFIG.TIMEOUT,

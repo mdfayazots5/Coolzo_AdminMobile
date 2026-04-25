@@ -1359,28 +1359,28 @@ export class MockServiceRequestRepository implements ServiceRequestRepository {
 
 export class LiveServiceRequestRepository implements ServiceRequestRepository {
   private async fetchAdminDetail(id: number) {
-    const response = await apiClient.get<BackendServiceRequestDetail>(`/api/v1/service-requests/${id}`);
+    const response = await apiClient.get<BackendServiceRequestDetail>(`/api/service-requests/${id}`);
     return response.data;
   }
 
   private async fetchTechnicianDetail(id: number) {
-    const response = await apiClient.get<BackendTechnicianJobDetail>(`/api/v1/technician-jobs/${id}`);
+    const response = await apiClient.get<BackendTechnicianJobDetail>(`/api/technician-jobs/${id}`);
     return response.data;
   }
 
   private async saveTechnicianNote(id: string, noteText: string, isCustomerVisible = false) {
-    await apiClient.post(`/api/v1/technician-jobs/${id}/notes`, {
+    await apiClient.post(`/api/technician-jobs/${id}/notes`, {
       noteText,
       isCustomerVisible,
     });
   }
 
   private async postTechnicianAction(id: string, action: string, remarks?: string) {
-    await apiClient.post(`/api/v1/technician-jobs/${id}/${action}`, buildTechnicianStatusPayload(remarks));
+    await apiClient.post(`/api/technician-jobs/${id}/${action}`, buildTechnicianStatusPayload(remarks));
   }
 
   async getSRs(filters: ServiceRequestFilters) {
-    const response = await apiClient.get<BackendServiceRequestListItem[]>("/api/v1/service-requests", {
+    const response = await apiClient.get<BackendServiceRequestListItem[]>("/api/service-requests", {
       params: {
         bookingId: filters.bookingId ? Number(filters.bookingId) : undefined,
         serviceId: filters.serviceId ? Number(filters.serviceId) : undefined,
@@ -1421,7 +1421,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
   }
 
   async createSR(input: CreateServiceRequestInput) {
-    const bookingResponse = await apiClient.post<BackendGuestBookingSummary>("/api/v1/bookings/guest", {
+    const bookingResponse = await apiClient.post<BackendGuestBookingSummary>("/api/bookings/guest", {
       serviceId: Number(input.serviceId),
       acTypeId: Number(input.acTypeId),
       tonnageId: Number(input.tonnageId),
@@ -1442,7 +1442,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
     });
 
     const createdResponse = await apiClient.post<BackendServiceRequestDetail>(
-      `/api/v1/service-requests/from-booking/${bookingResponse.data.bookingId}`,
+      `/api/service-requests/from-booking/${bookingResponse.data.bookingId}`,
     );
 
     let current = mapAdminDetailToServiceRequest(createdResponse.data);
@@ -1474,7 +1474,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
     const isReassignment = Boolean(current?.scheduling.assignedTechnicianId);
 
     await apiClient.post(
-      `/api/v1/service-requests/${srId}/${isReassignment ? "reassign" : "assign"}`,
+      `/api/service-requests/${srId}/${isReassignment ? "reassign" : "assign"}`,
       {
         technicianId: Number(technicianId),
         remarks: technicianName || "Assigned from AdminMobile dispatch.",
@@ -1487,7 +1487,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
   }
 
   async cancelSR(srId: string, reason: string) {
-    await apiClient.post(`/api/v1/cancellations/service-requests/${srId}`, {
+    await apiClient.post(`/api/cancellations/service-requests/${srId}`, {
       reasonCode: "ADMIN_CANCEL",
       reasonDescription: reason.trim() || "Cancelled from AdminMobile.",
       requiresApproval: false,
@@ -1495,7 +1495,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
   }
 
   async escalateSR(srId: string, type: string, note: string) {
-    await apiClient.post("/api/v1/escalations", {
+    await apiClient.post("/api/escalations", {
       alertType: type.trim() || "ServiceRequestEscalation",
       relatedEntityName: "ServiceRequest",
       relatedEntityId: srId,
@@ -1510,7 +1510,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
   }
 
   async addInternalNote(srId: string, content: string, isEscalation?: boolean) {
-    await apiClient.post(`/api/v1/service-requests/${srId}/notes`, {
+    await apiClient.post(`/api/service-requests/${srId}/notes`, {
       noteText:
         isEscalation && !ESCALATION_TAG_REGEX.test(content)
           ? buildEscalationNote("Operations", content)
@@ -1520,7 +1520,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
   }
 
   async getOperationsStats() {
-    const response = await apiClient.get<BackendOperationsDashboardSummary>("/api/v1/service-requests/dashboard-summary");
+    const response = await apiClient.get<BackendOperationsDashboardSummary>("/api/service-requests/dashboard-summary");
     const summary = response.data;
     const inProgress =
       summary.enRouteCount +
@@ -1564,7 +1564,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
       });
     }
 
-    const response = await apiClient.get<BackendTechnicianJobListItem[]>("/api/v1/technician-jobs/my-jobs", {
+    const response = await apiClient.get<BackendTechnicianJobListItem[]>("/api/technician-jobs/my-jobs", {
       params: {
         pageNumber: 1,
         pageSize: 50,
@@ -1591,7 +1591,7 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
       }
 
       const remarks = location ? `Location captured: ${location.lat}, ${location.lng}` : undefined;
-      await apiClient.post(`/api/v1/service-requests/${id}/status`, {
+      await apiClient.post(`/api/service-requests/${id}/status`, {
         status: backendStatus,
         remarks,
       });

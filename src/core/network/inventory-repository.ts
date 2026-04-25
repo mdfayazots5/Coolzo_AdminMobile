@@ -335,85 +335,85 @@ import { isDemoMode } from "../config/api-config";
 
 export class LiveInventoryRepository implements InventoryRepository {
   async getParts(filters: any) {
-    const response = await apiClient.get<Part[]>('/api/v1/inventory/parts', { params: filters });
+    const response = await apiClient.get<Part[]>('/api/inventory/parts', { params: filters });
     return response.data;
   }
 
   async getPartById(id: string) {
-    const response = await apiClient.get<Part>(`/api/v1/inventory/parts/${id}`);
+    const response = await apiClient.get<Part>(`/api/inventory/parts/${id}`);
     return response.data;
   }
 
   async createPart(data: Partial<Part>) {
-    const response = await apiClient.post<Part>('/api/v1/inventory/parts', data);
+    const response = await apiClient.post<Part>('/api/inventory/parts', data);
     return response.data;
   }
 
   async updatePart(id: string, data: Partial<Part>) {
-    const response = await apiClient.put<Part>(`/api/v1/inventory/parts/${id}`, data);
+    const response = await apiClient.put<Part>(`/api/inventory/parts/${id}`, data);
     return response.data;
   }
 
   async getPartsRequests(filters: any) {
-    const response = await apiClient.get<PartsRequest[]>('/api/v1/inventory/requests', { params: filters });
+    const response = await apiClient.get<PartsRequest[]>('/api/inventory/requests', { params: filters });
     return response.data;
   }
 
   async getPartsRequestById(id: string) {
-    const response = await apiClient.get<PartsRequest>(`/api/v1/inventory/requests/${id}`);
+    const response = await apiClient.get<PartsRequest>(`/api/inventory/requests/${id}`);
     return response.data;
   }
 
   async processPartsRequest(id: string, status: string, items: any[]) {
     const action = status === 'approved' ? 'approve' : status === 'partially_approved' ? 'partial' : 'reject';
-    await apiClient.patch(`/api/v1/inventory/parts-requests/${id}/${action}`, { items });
+    await apiClient.patch(`/api/inventory/parts-requests/${id}/${action}`, { items });
   }
 
   async getStockMovements(filters: any) {
-    const response = await apiClient.get<StockMovement[]>('/api/v1/inventory/stock-movements', { params: filters });
+    const response = await apiClient.get<StockMovement[]>('/api/inventory/stock-movements', { params: filters });
     return response.data;
   }
 
   async adjustStock(partId: string, quantity: number, reason: string) {
-    await apiClient.post('/api/v1/inventory/stock-adjust', { partId, quantity, reason });
+    await apiClient.post('/api/inventory/stock-adjust', { partId, quantity, reason });
   }
 
   async getPurchaseOrders(filters: any) {
-    const response = await apiClient.get<PurchaseOrder[]>('/api/v1/inventory/purchase-orders', { params: filters });
+    const response = await apiClient.get<PurchaseOrder[]>('/api/inventory/purchase-orders', { params: filters });
     return response.data;
   }
 
   async getPurchaseOrderById(id: string) {
-    const response = await apiClient.get<PurchaseOrder>(`/api/v1/inventory/purchase-orders/${id}`);
+    const response = await apiClient.get<PurchaseOrder>(`/api/inventory/purchase-orders/${id}`);
     return response.data;
   }
 
   async createPurchaseOrder(po: Partial<PurchaseOrder>) {
-    const response = await apiClient.post<PurchaseOrder>('/api/v1/inventory/purchase-orders', po);
+    const response = await apiClient.post<PurchaseOrder>('/api/inventory/purchase-orders', po);
     return response.data;
   }
 
   async receivePurchaseOrder(id: string, receivedQtys: Record<string, number>) {
-    await apiClient.patch(`/api/v1/inventory/purchase-orders/${id}/receive`, { receivedQtys });
+    await apiClient.patch(`/api/inventory/purchase-orders/${id}/receive`, { receivedQtys });
   }
 
   async getLowStockAlerts() {
-    const response = await apiClient.get<Part[]>('/api/v1/inventory/low-stock-alerts');
+    const response = await apiClient.get<Part[]>('/api/inventory/low-stock-alerts');
     return response.data;
   }
 
   async getSuppliers() {
-    const response = await apiClient.get<Supplier[]>('/api/v1/inventory/suppliers');
+    const response = await apiClient.get<Supplier[]>('/api/inventory/suppliers');
     return response.data;
   }
 
   async addSupplier(supplier: Partial<Supplier>) {
-    const response = await apiClient.post<Supplier>('/api/v1/inventory/suppliers', supplier);
+    const response = await apiClient.post<Supplier>('/api/inventory/suppliers', supplier);
     return response.data;
   }
 
   async getInventoryStats() {
-    const response = await apiClient.get('/api/v1/inventory/dashboard');
+    const response = await apiClient.get('/api/inventory/dashboard');
     return response.data;
   }
 }

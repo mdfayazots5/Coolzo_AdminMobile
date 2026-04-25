@@ -392,62 +392,62 @@ export class MockGovernanceRepository implements GovernanceRepository {
 
 export class LiveGovernanceRepository implements GovernanceRepository {
   async getNotificationTemplates() {
-    const response = await apiClient.get<NotificationTemplate[]>("/api/v1/notifications/templates");
+    const response = await apiClient.get<NotificationTemplate[]>("/api/notifications/templates");
     return response.data;
   }
 
   async updateNotificationTemplate(id: string, data: Partial<NotificationTemplate>) {
-    const response = await apiClient.put<NotificationTemplate>(`/api/v1/notifications/templates/${id}`, data);
+    const response = await apiClient.put<NotificationTemplate>(`/api/notifications/templates/${id}`, data);
     return response.data;
   }
 
   async getNotificationSendLogs() {
-    const response = await apiClient.get<NotificationSendLog[]>("/api/v1/notifications/log");
+    const response = await apiClient.get<NotificationSendLog[]>("/api/notifications/log");
     return response.data;
   }
 
   async createPushCampaign(payload: Omit<PushCampaign, "id" | "status">) {
-    const response = await apiClient.post<PushCampaign>("/api/v1/notifications/push-campaign", payload);
+    const response = await apiClient.post<PushCampaign>("/api/notifications/push-campaign", payload);
     return response.data;
   }
 
   async getCMSContent(type?: string) {
-    const response = await apiClient.get<CMSContent[]>("/api/v1/cms/blocks", { params: { type } });
+    const response = await apiClient.get<CMSContent[]>("/api/cms/blocks", { params: { type } });
     return response.data;
   }
 
   async updateCMSContent(id: string, data: Partial<CMSContent>) {
-    const response = await apiClient.put<CMSContent>(`/api/v1/cms/blocks/${id}`, data);
+    const response = await apiClient.put<CMSContent>(`/api/cms/blocks/${id}`, data);
     return response.data;
   }
 
   async createCMSContent(payload: Partial<CMSContent>) {
-    const response = await apiClient.post<CMSContent>("/api/v1/cms/blocks", payload);
+    const response = await apiClient.post<CMSContent>("/api/cms/blocks", payload);
     return response.data;
   }
 
   async getCoupons() {
-    const response = await apiClient.get<Coupon[]>("/api/v1/coupons");
+    const response = await apiClient.get<Coupon[]>("/api/coupons");
     return response.data;
   }
 
   async createCoupon(coupon: Partial<Coupon>) {
-    const response = await apiClient.post<Coupon>("/api/v1/coupons", coupon);
+    const response = await apiClient.post<Coupon>("/api/coupons", coupon);
     return response.data;
   }
 
   async updateCoupon(id: string, coupon: Partial<Coupon>) {
-    const response = await apiClient.put<Coupon>(`/api/v1/coupons/${id}`, coupon);
+    const response = await apiClient.put<Coupon>(`/api/coupons/${id}`, coupon);
     return response.data;
   }
 
   async disableCoupon(id: string) {
-    const response = await apiClient.patch<Coupon>(`/api/v1/coupons/${id}/disable`);
+    const response = await apiClient.patch<Coupon>(`/api/coupons/${id}/disable`);
     return response.data;
   }
 
   async getCouponAnalytics() {
-    const response = await apiClient.get<CouponAnalytics>("/api/v1/reports/discount-coupon-usage");
+    const response = await apiClient.get<CouponAnalytics>("/api/reports/discount-coupon-usage");
     return response.data;
   }
 
@@ -465,38 +465,38 @@ export class LiveGovernanceRepository implements GovernanceRepository {
   }
 
   async runReport(reportType: string, params?: Record<string, unknown>) {
-    const response = await apiClient.get<ReportResult>(`/api/v1/reports/${reportType}`, { params });
+    const response = await apiClient.get<ReportResult>(`/api/reports/${reportType}`, { params });
     return response.data;
   }
 
   async exportReport(reportType: string, params?: Record<string, unknown>) {
-    const response = await apiClient.get<{ downloadUrl: string }>(`/api/v1/reports/${reportType}`, {
+    const response = await apiClient.get<{ downloadUrl: string }>(`/api/reports/${reportType}`, {
       params: { ...params, export: "pdf" },
     });
     return response.data;
   }
 
   async getScheduledReports() {
-    const response = await apiClient.get<ScheduledReport[]>("/api/v1/reports/scheduled");
+    const response = await apiClient.get<ScheduledReport[]>("/api/reports/scheduled");
     return response.data;
   }
 
   async createScheduledReport(payload: Omit<ScheduledReport, "id">) {
-    const response = await apiClient.post<ScheduledReport>("/api/v1/reports/scheduled", payload);
+    const response = await apiClient.post<ScheduledReport>("/api/reports/scheduled", payload);
     return response.data;
   }
 
   async deleteScheduledReport(id: string) {
-    await apiClient.delete(`/api/v1/reports/scheduled/${id}`);
+    await apiClient.delete(`/api/reports/scheduled/${id}`);
   }
 
   async getAuditLogs(filters: any) {
-    const response = await apiClient.get<AuditLog[]>("/api/v1/audit-logs", { params: filters });
+    const response = await apiClient.get<AuditLog[]>("/api/audit-logs", { params: filters });
     return response.data;
   }
 
   async getDataAccessLogs() {
-    const response = await apiClient.get<DataAccessLog[]>("/api/v1/audit-logs/data-access");
+    const response = await apiClient.get<DataAccessLog[]>("/api/audit-logs/data-access");
     return response.data;
   }
 }

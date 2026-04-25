@@ -1077,7 +1077,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
 
   async getMyJobs() {
     try {
-      const response = await apiClient.get<BackendFieldJobListItem[]>("/api/v1/field/my-jobs");
+      const response = await apiClient.get<BackendFieldJobListItem[]>("/api/field/my-jobs");
       const jobs = sortJobs(response.data.map(mapJobListItem));
       saveMyJobsCache(jobs);
       return jobs;
@@ -1092,7 +1092,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
 
   async getJobHistory() {
     try {
-      const response = await apiClient.get<BackendFieldJobListItem[]>("/api/v1/field/job-history");
+      const response = await apiClient.get<BackendFieldJobListItem[]>("/api/field/job-history");
       const jobs = sortJobs(response.data.map(mapJobListItem));
       saveJobHistoryCache(jobs);
       return jobs;
@@ -1107,7 +1107,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
 
   async getJobDetail(serviceRequestId: string) {
     try {
-      const response = await apiClient.get<BackendFieldJobDetailResponse>(`/api/v1/field/jobs/${serviceRequestId}`);
+      const response = await apiClient.get<BackendFieldJobDetailResponse>(`/api/field/jobs/${serviceRequestId}`);
       return mapFieldJobDetail(response.data);
     } catch (error) {
       if (axios.isAxiosError(error) && !isOnline()) {
@@ -1122,7 +1122,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldJobDetail>({
       type: "field_depart",
       method: "patch",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/depart`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/depart`,
       body: {
         latitude: payload.latitude,
         longitude: payload.longitude,
@@ -1157,7 +1157,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
         buildOfflineSubmission({
           type: "field_arrive",
           method: "patch",
-          endpoint: `/api/v1/field/jobs/${serviceRequestId}/arrive`,
+          endpoint: `/api/field/jobs/${serviceRequestId}/arrive`,
           body: {
             latitude: payload.latitude,
             longitude: payload.longitude,
@@ -1183,7 +1183,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
 
     try {
       const response = await apiClient.patch<BackendFieldArrivalValidationResponse>(
-        `/api/v1/field/jobs/${serviceRequestId}/arrive`,
+        `/api/field/jobs/${serviceRequestId}/arrive`,
         {
           latitude: payload.latitude,
           longitude: payload.longitude,
@@ -1209,7 +1209,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldJobDetail>({
       type: "field_start_work",
       method: "patch",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/start-work`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/start-work`,
       body: {
         remarks,
       },
@@ -1232,7 +1232,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldJobDetail>({
       type: "field_progress",
       method: "patch",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/progress`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/progress`,
       body: payload,
       serviceRequestId,
       data: {
@@ -1266,7 +1266,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldPartsRequest>({
       type: "part_request",
       method: "post",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/parts-request`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/parts-request`,
       body: payload,
       serviceRequestId,
       data: {
@@ -1314,7 +1314,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldQuotation>({
       type: "estimate",
       method: "post",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/estimate`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/estimate`,
       body: payload,
       serviceRequestId,
       data: {
@@ -1375,7 +1375,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldJobReport>({
       type: "job_report",
       method: "post",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/report`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/report`,
       body: {
         ...payload,
         idempotencyKey,
@@ -1422,7 +1422,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldJobPhoto>({
       type: "job_photo",
       method: "post",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/photos`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/photos`,
       body: payload,
       serviceRequestId,
       data: {
@@ -1452,7 +1452,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldCustomerSignature>({
       type: "job_signature",
       method: "post",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/signature`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/signature`,
       body: payload,
       serviceRequestId,
       data: {
@@ -1496,7 +1496,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldPayment>({
       type: "job_payment",
       method: "patch",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/payment`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/payment`,
       body: {
         ...payload,
         idempotencyKey,
@@ -1546,7 +1546,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     return this.executeMutation<FieldJobDetail>({
       type: "job_complete",
       method: "patch",
-      endpoint: `/api/v1/field/jobs/${serviceRequestId}/complete`,
+      endpoint: `/api/field/jobs/${serviceRequestId}/complete`,
       body: {
         remarks,
       },
@@ -1569,7 +1569,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const result = await this.executeMutation<FieldAttendanceRecord>({
       type: "attendance_check_in",
       method: "post",
-      endpoint: "/api/v1/field/attendance/check-in",
+      endpoint: "/api/field/attendance/check-in",
       body: {
         locationText,
         latitude,
@@ -1603,7 +1603,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const result = await this.executeMutation<FieldAttendanceRecord>({
       type: "attendance_check_out",
       method: "post",
-      endpoint: "/api/v1/field/attendance/check-out",
+      endpoint: "/api/field/attendance/check-out",
       body: {
         locationText,
         latitude,
@@ -1693,9 +1693,9 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const helperProfileId = ensureHelperProfileId();
     try {
       const [assignmentResponse, tasksResponse, attendanceResponse] = await Promise.all([
-        apiClient.get<BackendHelperAssignmentResponse>(`/api/v1/helpers/${helperProfileId}/assignment`),
-        apiClient.get<BackendHelperTaskResponse[]>(`/api/v1/helpers/${helperProfileId}/tasks`),
-        apiClient.get<BackendAttendanceResponse[]>(`/api/v1/helpers/${helperProfileId}/attendance`),
+        apiClient.get<BackendHelperAssignmentResponse>(`/api/helpers/${helperProfileId}/assignment`),
+        apiClient.get<BackendHelperTaskResponse[]>(`/api/helpers/${helperProfileId}/tasks`),
+        apiClient.get<BackendAttendanceResponse[]>(`/api/helpers/${helperProfileId}/attendance`),
       ]);
 
       const helperView = {
@@ -1741,7 +1741,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const result = await this.executeMutation<FieldAttendanceRecord>({
       type: "helper_check_in",
       method: "post",
-      endpoint: `/api/v1/helpers/${helperProfileId}/attendance/check-in`,
+      endpoint: `/api/helpers/${helperProfileId}/attendance/check-in`,
       body: {
         locationText,
       },
@@ -1774,7 +1774,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const result = await this.executeMutation<FieldAttendanceRecord>({
       type: "helper_check_out",
       method: "post",
-      endpoint: `/api/v1/helpers/${helperProfileId}/attendance/check-out`,
+      endpoint: `/api/helpers/${helperProfileId}/attendance/check-out`,
       body: {
         locationText,
       },
@@ -1801,7 +1801,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const result = await this.executeMutation<HelperTask[]>({
       type: "helper_task",
       method: "post",
-      endpoint: `/api/v1/helpers/${helperProfileId}/tasks/${taskId}/respond`,
+      endpoint: `/api/helpers/${helperProfileId}/tasks/${taskId}/respond`,
       body: {
         responseStatus,
         responseRemarks,
@@ -1851,7 +1851,7 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
     const result = await this.executeMutation<HelperTask[]>({
       type: "helper_photo",
       method: "post",
-      endpoint: `/api/v1/helpers/${helperProfileId}/tasks/${taskId}/upload-photo`,
+      endpoint: `/api/helpers/${helperProfileId}/tasks/${taskId}/upload-photo`,
       body: payload,
       data: {
         taskId,

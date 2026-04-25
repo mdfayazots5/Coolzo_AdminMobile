@@ -534,19 +534,19 @@ interface BackendCustomerReview {
 
 export class LiveSupportRepository implements SupportRepository {
   async getTickets(filters: any) {
-    const response = await apiClient.get<BackendSupportTicketListItem[]>("/api/v1/support-tickets", {
+    const response = await apiClient.get<BackendSupportTicketListItem[]>("/api/support-tickets", {
       params: toSupportTicketSearchParams(filters),
     });
     return response.data.map(mapTicketListItem);
   }
 
   async getTicketById(id: string) {
-    const response = await apiClient.get<BackendSupportTicketDetail>(`/api/v1/support-tickets/${id}`);
+    const response = await apiClient.get<BackendSupportTicketDetail>(`/api/support-tickets/${id}`);
     return mapTicketDetail(response.data);
   }
 
   async createTicket(ticket: Partial<SupportTicket> & { categoryId?: number; priorityId?: number; description?: string; linkedSrId?: string }) {
-    const response = await apiClient.post<BackendSupportTicketDetail>("/api/v1/support-tickets", {
+    const response = await apiClient.post<BackendSupportTicketDetail>("/api/support-tickets", {
       customerId: Number(ticket.customerId || 0) || null,
       subject: ticket.subject,
       categoryId: ticket.categoryId || Number(ticket.category) || 1,
@@ -562,7 +562,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async addMessage(ticketId: string, message: Partial<TicketMessage>) {
-    await apiClient.post(`/api/v1/support-tickets/${ticketId}/replies`, {
+    await apiClient.post(`/api/support-tickets/${ticketId}/replies`, {
       replyText: message.text,
       isInternalOnly: Boolean(message.isInternal),
     });
@@ -575,7 +575,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async assignTicket(id: string, agentId: string) {
-    await apiClient.post(`/api/v1/support-tickets/${id}/assign`, {
+    await apiClient.post(`/api/support-tickets/${id}/assign`, {
       assignedUserId: Number(agentId),
       remarks: "Assigned from admin mobile.",
     });
@@ -587,7 +587,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async escalateTicket(id: string, targetRole: string, reason: string) {
-    await apiClient.post(`/api/v1/support-tickets/${id}/escalate`, {
+    await apiClient.post(`/api/support-tickets/${id}/escalate`, {
       escalationTarget: targetRole,
       escalationRemarks: reason,
     });
@@ -599,7 +599,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async updateTicketStatus(id: string, status: TicketStatus) {
-    await apiClient.post(`/api/v1/support-tickets/${id}/change-status`, {
+    await apiClient.post(`/api/support-tickets/${id}/change-status`, {
       status: toBackendStatus(status),
       remarks: "Status updated from admin mobile.",
     });
@@ -611,7 +611,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async closeTicket(id: string, remarks?: string) {
-    await apiClient.post(`/api/v1/support-tickets/${id}/close`, {
+    await apiClient.post(`/api/support-tickets/${id}/close`, {
       remarks: remarks || "Closed from admin mobile.",
     });
     const refreshed = await this.getTicketById(id);
@@ -622,7 +622,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async getSupportStats() {
-    const analyticsResponse = await apiClient.get<BackendSupportAnalytics>("/api/v1/analytics/support");
+    const analyticsResponse = await apiClient.get<BackendSupportAnalytics>("/api/analytics/support");
     const tickets = await this.getTickets({});
     const analytics = analyticsResponse.data;
     const totalTickets = Number(analytics.totalTickets || 0);
@@ -640,22 +640,22 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async getTicketCategories() {
-    const response = await apiClient.get<SupportLookupItem[]>("/api/v1/support-ticket-lookups/categories");
+    const response = await apiClient.get<SupportLookupItem[]>("/api/support-ticket-lookups/categories");
     return response.data;
   }
 
   async getTicketPriorities() {
-    const response = await apiClient.get<SupportLookupItem[]>("/api/v1/support-ticket-lookups/priorities");
+    const response = await apiClient.get<SupportLookupItem[]>("/api/support-ticket-lookups/priorities");
     return response.data;
   }
 
   async getTicketStatuses() {
-    const response = await apiClient.get<SupportLookupItem[]>("/api/v1/support-ticket-lookups/statuses");
+    const response = await apiClient.get<SupportLookupItem[]>("/api/support-ticket-lookups/statuses");
     return response.data;
   }
 
   async getFeedback(filters: any) {
-    const response = await apiClient.get<BackendCustomerReview[]>("/api/v1/customer-reviews", {
+    const response = await apiClient.get<BackendCustomerReview[]>("/api/customer-reviews", {
       params: { serviceId: filters?.serviceId },
     });
     const mapped = response.data.map(mapCustomerReview);
@@ -668,17 +668,17 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async respondToFeedback(id: string, response: string) {
-    const backendResponse = await apiClient.patch<Feedback>(`/api/v1/feedback/${id}/respond`, { response });
+    const backendResponse = await apiClient.patch<Feedback>(`/api/feedback/${id}/respond`, { response });
     return backendResponse.data;
   }
 
   async publishFeedback(id: string, publish: boolean) {
-    const backendResponse = await apiClient.patch<Feedback>(`/api/v1/feedback/${id}/publish`, { publish });
+    const backendResponse = await apiClient.patch<Feedback>(`/api/feedback/${id}/publish`, { publish });
     return backendResponse.data;
   }
 
   async flagFeedback(id: string, reason: string) {
-    const backendResponse = await apiClient.patch<Feedback>(`/api/v1/feedback/${id}/flag`, { reason });
+    const backendResponse = await apiClient.patch<Feedback>(`/api/feedback/${id}/flag`, { reason });
     return backendResponse.data;
   }
 
@@ -719,7 +719,7 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async getComplaintHeatmap() {
-    const response = await apiClient.get<ComplaintHeatmapCell[]>("/api/v1/feedback/complaint-heatmap");
+    const response = await apiClient.get<ComplaintHeatmapCell[]>("/api/feedback/complaint-heatmap");
     return response.data;
   }
 }

@@ -389,7 +389,7 @@ export class MockUserRepository implements UserRepository {
 
 export class LiveUserRepository implements UserRepository {
   async getUsers(filters: UserListFilters): Promise<User[]> {
-    const response = await apiClient.get<BackendUserSummary[]>("/api/v1/users", {
+    const response = await apiClient.get<BackendUserSummary[]>("/api/users", {
       params: {
         pageNumber: filters.pageNumber ?? 1,
         pageSize: filters.pageSize ?? 100,
@@ -412,12 +412,12 @@ export class LiveUserRepository implements UserRepository {
   }
 
   async getUserById(id: string): Promise<User | null> {
-    const response = await apiClient.get<BackendUserDetail>(`/api/v1/users/${id}`);
+    const response = await apiClient.get<BackendUserDetail>(`/api/users/${id}`);
     return mapBackendUserDetail(response.data);
   }
 
   async createUser(user: CreateUserInput): Promise<User> {
-    const response = await apiClient.post<BackendUserSummary>("/api/v1/users", {
+    const response = await apiClient.post<BackendUserSummary>("/api/users", {
       userName: user.userName.trim(),
       email: user.email.trim(),
       fullName: user.fullName.trim(),
@@ -431,7 +431,7 @@ export class LiveUserRepository implements UserRepository {
   }
 
   async updateUser(id: string, user: UpdateUserInput): Promise<User> {
-    const response = await apiClient.put<BackendUserSummary>(`/api/v1/users/${id}`, {
+    const response = await apiClient.put<BackendUserSummary>(`/api/users/${id}`, {
       userId: Number(id),
       email: user.email.trim(),
       fullName: user.fullName.trim(),
@@ -444,7 +444,7 @@ export class LiveUserRepository implements UserRepository {
   }
 
   async deactivateUser(id: string, reason?: string): Promise<User> {
-    const response = await apiClient.post<BackendUserSummary>(`/api/v1/users/${id}/deactivate`, {
+    const response = await apiClient.post<BackendUserSummary>(`/api/users/${id}/deactivate`, {
       reason: reason || undefined,
     });
 
@@ -452,13 +452,13 @@ export class LiveUserRepository implements UserRepository {
   }
 
   async reactivateUser(id: string): Promise<User> {
-    const response = await apiClient.post<BackendUserSummary>(`/api/v1/users/${id}/reactivate`);
+    const response = await apiClient.post<BackendUserSummary>(`/api/users/${id}/reactivate`);
     return mapBackendUserSummary(response.data);
   }
 
   async resetPassword(id: string, reason?: string): Promise<UserPasswordResetResult> {
     const response = await apiClient.post<BackendUserPasswordResetResponse>(
-      `/api/v1/users/${id}/reset-password`,
+      `/api/users/${id}/reset-password`,
       { reason: reason || undefined }
     );
 
@@ -467,7 +467,7 @@ export class LiveUserRepository implements UserRepository {
 
   async resetPin(id: string, reason?: string): Promise<UserPasswordResetResult> {
     const response = await apiClient.post<BackendUserPasswordResetResponse>(
-      `/api/v1/users/${id}/reset-pin`,
+      `/api/users/${id}/reset-pin`,
       { reason: reason || undefined }
     );
 

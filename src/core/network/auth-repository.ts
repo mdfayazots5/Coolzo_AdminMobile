@@ -154,7 +154,7 @@ export class MockAuthRepository implements AuthRepository {
 
 export class LiveAuthRepository implements AuthRepository {
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await apiClient.post<BackendAuthTokenResponse>('/api/v1/auth/login', {
+    const response = await apiClient.post<BackendAuthTokenResponse>('/api/auth/login', {
       userNameOrEmail: email,
       password,
     });
@@ -162,22 +162,22 @@ export class LiveAuthRepository implements AuthRepository {
   }
 
   async loginField(employeeId: string, pin: string): Promise<AuthResponse> {
-    const response = await apiClient.post<BackendAuthTokenResponse>('/api/v1/auth/login-field', { employeeId, pin });
+    const response = await apiClient.post<BackendAuthTokenResponse>('/api/auth/login-field', { employeeId, pin });
     return mapBackendAuthResponse(response.data);
   }
 
   async loginWithOtp(loginId: string, otp: string): Promise<AuthResponse> {
-    const response = await apiClient.post<BackendAuthTokenResponse>('/api/v1/auth/login-otp', { loginId, otp });
+    const response = await apiClient.post<BackendAuthTokenResponse>('/api/auth/login-otp', { loginId, otp });
     return mapBackendAuthResponse(response.data);
   }
 
   async verifyOTP(email: string, otp: string): Promise<AuthResponse> {
-    const response = await apiClient.post<BackendAuthTokenResponse>('/api/v1/auth/verify-otp', { email, otp });
+    const response = await apiClient.post<BackendAuthTokenResponse>('/api/auth/verify-otp', { email, otp });
     return mapBackendAuthResponse(response.data);
   }
 
   async refreshToken(accessToken: string, refreshToken: string): Promise<AuthResponse> {
-    const response = await apiClient.post<BackendAuthTokenResponse>('/api/v1/auth/refresh-token', {
+    const response = await apiClient.post<BackendAuthTokenResponse>('/api/auth/refresh-token', {
       accessToken,
       refreshToken,
     });
@@ -185,28 +185,28 @@ export class LiveAuthRepository implements AuthRepository {
   }
 
   async forgotPassword(email: string): Promise<void> {
-    await apiClient.post('/api/v1/auth/forgot-password', { email });
+    await apiClient.post('/api/auth/forgot-password', { email });
   }
 
   async resetPassword(token: string, password: string): Promise<void> {
-    await apiClient.post('/api/v1/auth/reset-password', { token, password });
+    await apiClient.post('/api/auth/reset-password', { token, password });
   }
 
   async logout(refreshToken: string): Promise<void> {
-    await apiClient.post('/api/v1/auth/logout', { refreshToken });
+    await apiClient.post('/api/auth/logout', { refreshToken });
   }
 
   async forceLogout(userId: string): Promise<void> {
-    await apiClient.post(`/api/v1/auth/force-logout/${userId}`);
+    await apiClient.post(`/api/auth/force-logout/${userId}`);
   }
 
   async getUserProfile(): Promise<UserProfile> {
-    const response = await apiClient.get<{ currentUser?: BackendAuthTokenResponse["currentUser"] } & BackendCurrentUser>('/api/v1/auth/me');
+    const response = await apiClient.get<{ currentUser?: BackendAuthTokenResponse["currentUser"] } & BackendCurrentUser>('/api/auth/me');
     return mapBackendCurrentUser((response.data as BackendCurrentUser));
   }
 
   async getPermissionSnapshot(user: UserProfile): Promise<PermissionSnapshot> {
-    const response = await apiClient.get<BackendPermissionSnapshot>('/api/v1/auth/me/permissions');
+    const response = await apiClient.get<BackendPermissionSnapshot>('/api/auth/me/permissions');
 
     return {
       permissionSet: buildPermissionSetFromSnapshot(response.data, user.role),
@@ -216,7 +216,7 @@ export class LiveAuthRepository implements AuthRepository {
   }
 
   async viewAsRole(roleId: string): Promise<ViewAsRoleSession> {
-    const response = await apiClient.post<BackendViewAsRoleResponse>('/api/v1/admin/view-as-role', {
+    const response = await apiClient.post<BackendViewAsRoleResponse>('/api/admin/view-as-role', {
       roleId: Number(roleId),
     });
 
