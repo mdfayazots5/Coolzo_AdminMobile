@@ -121,8 +121,12 @@ import { NotificationsScreen } from "../screens/NotificationsScreen";
 import { SettingsHomeScreen } from "../screens/SettingsHomeScreen";
 
 const RoleGuard = ({ module, children }: { module: string; children: React.ReactNode }) => {
-  const { canView } = useRBAC();
+  const { canView, isPermissionsReady } = useRBAC();
   const location = useLocation();
+
+  if (!isPermissionsReady) {
+    return <SplashScreen />;
+  }
 
   if (!canView(module)) {
     logPermissionDeniedAttempt({ module, action: "view", route: location.pathname });
@@ -164,11 +168,11 @@ const ParamRedirect = ({ resolve }: { resolve: (params: Record<string, string | 
 const routes = [
   { path: "/", element: <Navigate to="/dashboard" replace /> },
   { path: "/login", element: <GuestGuard><LoginScreen /></GuestGuard> },
-  { path: "/verify-otp", element: <OTPVerificationScreen /> },
+  { path: "/verify-otp", element: <GuestGuard><OTPVerificationScreen /></GuestGuard> },
   { path: "/forgot-password", element: <ForgotPasswordScreen /> },
   { path: "/reset-password", element: <ResetPasswordScreen /> },
   { path: "/forgot-pin", element: <ForgotPINScreen /> },
-  { path: "/session-expired", element: <SessionExpiredScreen /> },
+  { path: "/session-expired", element: <GuestGuard><SessionExpiredScreen /></GuestGuard> },
   { path: "/update-required", element: <UpdatePromptScreen /> },
   { path: "/unauthorized", element: <AuthGuard><UnauthorizedScreen /></AuthGuard> },
   { path: "/dashboard", element: <AuthGuard><RoleGuard module="dashboard"><DashboardScreen /></RoleGuard></AuthGuard> },

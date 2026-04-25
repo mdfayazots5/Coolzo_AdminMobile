@@ -29,6 +29,7 @@ import {
   InvoiceStatus,
   invoiceRepository,
 } from "@/core/network/invoice-repository"
+import { getApiErrorMessage } from "@/core/network/api-error"
 import { cn } from "@/lib/utils"
 
 export default function InvoiceListScreen() {
@@ -36,11 +37,13 @@ export default function InvoiceListScreen() {
   const [dashboard, setDashboard] = React.useState<AccountsReceivableDashboard | null>(null)
   const [invoices, setInvoices] = React.useState<Invoice[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
+  const [errorMessage, setErrorMessage] = React.useState("")
   const [filter, setFilter] = React.useState<InvoiceStatus | "all">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true)
+    setErrorMessage("")
     try {
       const [invoiceData, arDashboard] = await Promise.all([
         invoiceRepository.getInvoices({ status: filter, search: searchQuery }),
@@ -49,8 +52,11 @@ export default function InvoiceListScreen() {
       setInvoices(invoiceData)
       setDashboard(arDashboard)
     } catch (error) {
-      console.error(error)
-      toast.error("Unable to load invoices")
+      setInvoices([])
+      setDashboard(null)
+      const message = getApiErrorMessage(error, "Unable to load invoices")
+      setErrorMessage(message)
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }
@@ -104,8 +110,30 @@ export default function InvoiceListScreen() {
     })
     .sort((left, right) => new Date(right.issueDate).getTime() - new Date(left.issueDate).getTime())
 
-  if (isLoading || !dashboard) {
+  if (isLoading) {
     return <InlineLoader className="h-screen" />
+  }
+
+  if (!dashboard) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-navy">Invoices & Billing</h1>
+          <p className="text-sm text-brand-muted">Billing operations, reminders, exports, and receivable follow-up</p>
+        </div>
+
+        <AdminCard className="p-8 space-y-4 border-destructive/20 bg-destructive/5">
+          <div>
+            <h2 className="text-lg font-bold text-brand-navy">Could not load invoices</h2>
+            <p className="text-sm text-brand-muted">{errorMessage || "Unable to load invoices"}</p>
+          </div>
+          <div className="flex gap-3">
+            <AdminButton onClick={() => void loadData()}>Retry</AdminButton>
+            <AdminButton variant="secondary" onClick={() => navigate("/dashboard")}>Back to Dashboard</AdminButton>
+          </div>
+        </AdminCard>
+      </div>
+    )
   }
 
   return (

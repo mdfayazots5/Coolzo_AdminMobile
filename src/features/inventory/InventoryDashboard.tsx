@@ -24,29 +24,63 @@ import { AdminButton } from "@/components/shared/AdminButton"
 import { cn } from "@/lib/utils"
 import { useNavigate } from "react-router-dom"
 
+type InventoryStats = {
+  totalSKUs: number
+  totalStockValue: number
+  lowStockCount: number
+  outOfStockCount: number
+  pendingRequests: number
+  openPOs: number
+}
+
+const EMPTY_STATS: InventoryStats = {
+  totalSKUs: 0,
+  totalStockValue: 0,
+  lowStockCount: 0,
+  outOfStockCount: 0,
+  pendingRequests: 0,
+  openPOs: 0,
+}
+
 export default function InventoryDashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = React.useState<any>(null)
+  const [stats, setStats] = React.useState<InventoryStats>(EMPTY_STATS)
   const [lowStockAlerts, setLowStockAlerts] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
+
+  const fetchStats = React.useCallback(async () => {
+    setIsLoading(true)
+    setErrorMessage(null)
+
+    try {
+      const [data, alerts] = await Promise.all([
+        inventoryRepository.getInventoryStats(),
+        inventoryRepository.getLowStockAlerts(),
+      ])
+
+      setStats({
+        totalSKUs: Number(data?.totalSKUs ?? 0),
+        totalStockValue: Number(data?.totalStockValue ?? 0),
+        lowStockCount: Number(data?.lowStockCount ?? 0),
+        outOfStockCount: Number(data?.outOfStockCount ?? 0),
+        pendingRequests: Number(data?.pendingRequests ?? 0),
+        openPOs: Number(data?.openPOs ?? 0),
+      })
+      setLowStockAlerts(Array.isArray(alerts) ? alerts.slice(0, 3) : [])
+    } catch (error) {
+      console.error(error)
+      setStats(EMPTY_STATS)
+      setLowStockAlerts([])
+      setErrorMessage(error instanceof Error ? error.message : "Inventory dashboard data could not be loaded.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   React.useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [data, alerts] = await Promise.all([
-          inventoryRepository.getInventoryStats(),
-          inventoryRepository.getLowStockAlerts(),
-        ]);
-        setStats(data);
-        setLowStockAlerts(alerts.slice(0, 3));
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchStats();
-  }, [])
+    void fetchStats()
+  }, [fetchStats])
 
   if (isLoading) return <InlineLoader className="h-screen" />;
 
@@ -61,13 +95,42 @@ export default function InventoryDashboard() {
           <AdminButton 
             variant="outline" 
             icon={<RefreshCw size={18} />}
-            onClick={() => toast.info('Stock audit requested for primary warehouse.')}
+            onClick={() => {
+              if (errorMessage) {
+                void fetchStats()
+                return
+              }
+              toast.info('Stock audit requested for primary warehouse.')
+            }}
           >
-            Stock Audit
+            {errorMessage ? "Retry" : "Stock Audit"}
           </AdminButton>
           <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/catalog')}>Add New Part</AdminButton>
         </div>
       </div>
+
+      {errorMessage ? (
+        <AdminCard className="w-full p-5 sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-status-emergency">Inventory Service Issue</p>
+              <h2 className="text-xl font-bold text-brand-navy">Inventory data is temporarily unavailable</h2>
+              <p className="max-w-2xl break-words text-sm leading-6 text-brand-muted">
+                The dashboard stayed available, but the live inventory API did not return the expected data. You can retry now or continue into catalog and supplier screens.
+              </p>
+              <p className="break-words text-xs leading-5 text-brand-muted">{errorMessage}</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <AdminButton variant="outline" onClick={() => void fetchStats()}>
+                Retry
+              </AdminButton>
+              <AdminButton onClick={() => navigate('/inventory/catalog')}>
+                Open Catalog
+              </AdminButton>
+            </div>
+          </div>
+        </AdminCard>
+      ) : null}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

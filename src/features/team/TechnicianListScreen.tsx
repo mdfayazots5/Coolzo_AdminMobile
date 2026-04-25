@@ -14,6 +14,7 @@ import { TechnicianCard } from "@/components/shared/TechnicianCard"
 import { InlineLoader } from "@/components/shared/Layout"
 import { AdminDropdown } from "@/components/shared/Pickers"
 import { bookingLookupRepository, BookingZoneLookup } from "@/core/network/booking-lookup-repository"
+import { useRBAC } from "@/core/auth/RBACProvider"
 import { getApiErrorMessage } from "@/core/network/api-error"
 import { Technician, technicianRepository, TechnicianStatus } from "@/core/network/technician-repository"
 import { cn } from "@/lib/utils"
@@ -37,6 +38,7 @@ const minimumRatingOptions: { label: string; value: string }[] = [
 
 export default function TechnicianListScreen() {
   const navigate = useNavigate()
+  const { canCreate } = useRBAC()
   const [technicians, setTechnicians] = React.useState<Technician[]>([])
   const [zones, setZones] = React.useState<BookingZoneLookup[]>([])
   const [skillOptions, setSkillOptions] = React.useState<string[]>([])
@@ -94,6 +96,7 @@ export default function TechnicianListScreen() {
 
         setTechnicians(data)
       } catch (error) {
+        setTechnicians([])
         setErrorMessage(getApiErrorMessage(error, "Unable to load technician profiles"))
       } finally {
         setIsLoading(false)
@@ -152,9 +155,11 @@ export default function TechnicianListScreen() {
               <List size={18} />
             </button>
           </div>
-          <AdminButton onClick={() => navigate("/team/create")} iconLeft={<Plus size={18} />}>
-            Add Technician
-          </AdminButton>
+          {canCreate("team") && (
+            <AdminButton onClick={() => navigate("/team/create")} iconLeft={<Plus size={18} />}>
+              Add Technician
+            </AdminButton>
+          )}
         </div>
       </div>
 

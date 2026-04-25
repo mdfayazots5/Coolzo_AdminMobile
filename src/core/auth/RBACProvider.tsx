@@ -15,6 +15,7 @@ interface RBACContextType {
   engine: RBACEngine;
   dataScope: string;
   effectiveRole: UserRole | null;
+  isPermissionsReady: boolean;
   isViewingAsRole: boolean;
   viewAsRole: ViewAsRoleSession | null;
   refreshPermissions: () => Promise<void>;
@@ -36,6 +37,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   const [permissionSet, setPermissionSet] = React.useState<PermissionSet>(() => LocalStorage.get<PermissionSet>(StorageKey.PERMISSION_SET) || {});
   const [dataScope, setDataScope] = React.useState(() => LocalStorage.get<string>(StorageKey.PERMISSION_SCOPE) || 'All');
   const [viewAsRole, setViewAsRole] = React.useState<ViewAsRoleSession | null>(() => LocalStorage.get<ViewAsRoleSession>(StorageKey.VIEW_AS_ROLE));
+  const [isPermissionsReady, setIsPermissionsReady] = React.useState(() => Boolean(LocalStorage.get<PermissionSet>(StorageKey.PERMISSION_SET)));
 
   const persistPermissionState = React.useCallback((nextPermissionSet: PermissionSet, nextDataScope: string) => {
     setPermissionSet(nextPermissionSet);
@@ -43,12 +45,14 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
     LocalStorage.set(StorageKey.PERMISSION_SET, nextPermissionSet);
     LocalStorage.set(StorageKey.PERMISSION_SCOPE, nextDataScope);
     LocalStorage.set(StorageKey.PERMISSION_LOADED_AT, Date.now());
+    setIsPermissionsReady(true);
   }, []);
 
   const loadCurrentUserPermissions = React.useCallback(async () => {
     if (!user) {
       setPermissionSet({});
       setDataScope('All');
+      setIsPermissionsReady(true);
       LocalStorage.remove(StorageKey.PERMISSION_SET);
       LocalStorage.remove(StorageKey.PERMISSION_SCOPE);
       LocalStorage.remove(StorageKey.PERMISSION_LOADED_AT);
@@ -70,6 +74,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    setIsPermissionsReady(false);
     await loadCurrentUserPermissions();
   }, [loadCurrentUserPermissions, persistPermissionState, viewAsRole]);
 
@@ -120,6 +125,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
     engine,
     dataScope,
     effectiveRole,
+    isPermissionsReady,
     isViewingAsRole: Boolean(viewAsRole),
     viewAsRole,
     refreshPermissions,

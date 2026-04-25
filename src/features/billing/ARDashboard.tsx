@@ -20,31 +20,61 @@ import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { AccountsReceivableDashboard, invoiceRepository } from "@/core/network/invoice-repository"
+import { getApiErrorMessage } from "@/core/network/api-error"
 import { cn } from "@/lib/utils"
 
 export default function ARDashboard() {
   const navigate = useNavigate()
   const [dashboard, setDashboard] = React.useState<AccountsReceivableDashboard | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
+  const [errorMessage, setErrorMessage] = React.useState("")
 
-  React.useEffect(() => {
-    const loadDashboard = async () => {
-      try {
-        const data = await invoiceRepository.getAccountsReceivableDashboard()
-        setDashboard(data)
-      } catch (error) {
-        console.error(error)
-        toast.error("Unable to load receivables dashboard")
-      } finally {
-        setIsLoading(false)
-      }
+  const loadDashboard = React.useCallback(async () => {
+    setIsLoading(true)
+    setErrorMessage("")
+
+    try {
+      const data = await invoiceRepository.getAccountsReceivableDashboard()
+      setDashboard(data)
+    } catch (error) {
+      console.error(error)
+      setDashboard(null)
+      const message = getApiErrorMessage(error, "Unable to load receivables dashboard")
+      setErrorMessage(message)
+      toast.error(message)
+    } finally {
+      setIsLoading(false)
     }
-
-    void loadDashboard()
   }, [])
 
-  if (isLoading || !dashboard) {
+  React.useEffect(() => {
+    void loadDashboard()
+  }, [loadDashboard])
+
+  if (isLoading) {
     return <InlineLoader className="h-screen" />
+  }
+
+  if (!dashboard) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-brand-navy">Accounts Receivable</h1>
+          <p className="text-sm text-brand-muted">Aging buckets, overdue recovery, and customer follow-up</p>
+        </div>
+
+        <AdminCard className="p-8 space-y-4 border-destructive/20 bg-destructive/5">
+          <div>
+            <h2 className="text-lg font-bold text-brand-navy">Could not load receivables dashboard</h2>
+            <p className="text-sm text-brand-muted">{errorMessage || "Unable to load receivables dashboard"}</p>
+          </div>
+          <div className="flex gap-3">
+            <AdminButton onClick={() => void loadDashboard()}>Retry</AdminButton>
+            <AdminButton variant="secondary" onClick={() => navigate("/dashboard")}>Back to Dashboard</AdminButton>
+          </div>
+        </AdminCard>
+      </div>
+    )
   }
 
   return (

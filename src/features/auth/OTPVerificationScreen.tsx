@@ -11,7 +11,7 @@ import { useAuthStore } from "@/store/auth-store"
 import { authRepository } from "@/core/network/auth-repository"
 import { resolveDefaultRoute } from "@/core/auth/auth-session"
 import { toast } from "sonner"
-import { ShieldCheck, ArrowLeft, RefreshCw } from "lucide-react"
+import { ShieldCheck, ArrowLeft, RefreshCw, Mail, Smartphone, AlertCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 
 export default function OTPVerificationScreen() {
@@ -24,17 +24,30 @@ export default function OTPVerificationScreen() {
   const navigate = useNavigate()
 
   React.useEffect(() => {
-    if (!user) {
-      navigate("/login")
-    }
-  }, [user, navigate])
-
-  React.useEffect(() => {
     if (countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
       return () => clearTimeout(timer)
     }
   }, [countdown])
+
+  React.useEffect(() => {
+    if (!user) {
+      return
+    }
+
+    inputs.current[0]?.focus()
+  }, [user])
+
+  const maskedEmail = React.useMemo(() => {
+    if (!user?.email) return "your registered account"
+
+    const [localPart, domain = "coolzo.com"] = user.email.split("@")
+    if (!localPart) return user.email
+
+    const visiblePrefix = localPart.slice(0, 2)
+    const maskedLocal = `${visiblePrefix}${"*".repeat(Math.max(localPart.length - visiblePrefix.length, 1))}`
+    return `${maskedLocal}@${domain}`
+  }, [user?.email])
 
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) value = value[value.length - 1]
@@ -59,14 +72,39 @@ export default function OTPVerificationScreen() {
     }
   }
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6)
+    if (!pasted) {
+      return
+    }
+
+    e.preventDefault()
+    const nextOtp = pasted.padEnd(6, "").split("").slice(0, 6)
+    setOtp(nextOtp)
+
+    const nextFocusIndex = Math.min(pasted.length, 5)
+    inputs.current[nextFocusIndex]?.focus()
+
+    if (pasted.length === 6) {
+      void handleVerify(pasted)
+    }
+  }
+
   const handleVerify = async (code: string) => {
+    if (!user?.email) {
+      toast.error("Your verification session expired. Please log in again.")
+      setUnauthenticated()
+      navigate("/login")
+      return
+    }
+
     setIsLoading(true)
     try {
-      const response = await authRepository.verifyOTP(user?.email || '', code)
+      const response = await authRepository.verifyOTP(user.email, code)
       login(response.user, response.token, response.refreshToken)
       toast.success("Identity verified successfully")
       navigate(resolveDefaultRoute(response.user.role))
-    } catch (error: any) {
+    } catch {
       toast.error("Invalid verification code")
       setOtp(["", "", "", "", "", ""])
       inputs.current[0]?.focus()
@@ -75,15 +113,67 @@ export default function OTPVerificationScreen() {
     }
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-brand-navy flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-gold/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-gold/5 rounded-full blur-[120px]" />
+
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="w-full max-w-[440px] z-10"
+        >
+          <div className="flex flex-col items-center mb-10 text-center w-full">
+            <div className="w-16 h-16 bg-brand-gold rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-brand-gold/20">
+              <span className="text-brand-navy text-3xl font-bold tracking-tighter">C</span>
+            </div>
+            <h1 className="text-brand-gold text-2xl font-bold tracking-[0.2em] uppercase">Coolzo</h1>
+            <p className="text-brand-muted text-xs mt-1 tracking-widest uppercase">Admin Portal</p>
+          </div>
+
+          <AdminCard className="p-8 border-brand-navy/20 bg-brand-surface/95 backdrop-blur-sm shadow-2xl text-center">
+            <div className="w-16 h-16 bg-status-urgent/10 rounded-full flex items-center justify-center mx-auto mb-6 text-status-urgent">
+              <AlertCircle size={32} />
+            </div>
+            <h2 className="text-xl font-bold text-brand-navy mb-2">Verification Session Expired</h2>
+            <p className="text-sm text-brand-muted mb-8 leading-relaxed">
+              Your two-step verification session is no longer active. Return to login and sign in again to receive a new code.
+            </p>
+            <AdminButton
+              fullWidth
+              onClick={() => {
+                setUnauthenticated()
+                navigate("/login")
+              }}
+              className="h-12 text-sm font-bold uppercase tracking-[0.1em]"
+            >
+              Return to Login
+            </AdminButton>
+          </AdminCard>
+        </motion.div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-brand-navy flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-brand-navy flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden">
       <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-gold/5 rounded-full blur-[120px]" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-gold/5 rounded-full blur-[120px]" />
       
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="w-full max-w-md z-10"
+        className="w-full max-w-[440px] z-10"
       >
+        <div className="flex flex-col items-center mb-10 text-center w-full">
+          <div className="w-16 h-16 bg-brand-gold rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-brand-gold/20">
+            <span className="text-brand-navy text-3xl font-bold tracking-tighter">C</span>
+          </div>
+          <h1 className="text-brand-gold text-2xl font-bold tracking-[0.2em] uppercase">Coolzo</h1>
+          <p className="text-brand-muted text-xs mt-1 tracking-widest uppercase">Admin Portal</p>
+        </div>
+
         <button 
           onClick={() => {
             setUnauthenticated()
@@ -95,15 +185,32 @@ export default function OTPVerificationScreen() {
           <span className="text-xs font-bold uppercase tracking-wider">Back to Login</span>
         </button>
 
-        <AdminCard className="p-8 border-brand-navy/20 bg-brand-surface/95 backdrop-blur-sm text-center">
+        <AdminCard className="p-6 sm:p-8 border-brand-navy/20 bg-brand-surface/95 backdrop-blur-sm shadow-2xl text-center">
           <div className="w-16 h-16 bg-brand-gold/10 rounded-full flex items-center justify-center mx-auto mb-6 text-brand-gold">
             <ShieldCheck size={32} />
           </div>
           
           <h2 className="text-xl font-bold text-brand-navy mb-2">Two-Step Verification</h2>
-          <p className="text-sm text-brand-muted mb-8">
-            A 6-digit verification code has been sent to your registered device. Please enter it below.
+          <p className="text-sm text-brand-muted leading-relaxed mb-6">
+            Enter the 6-digit verification code sent to <span className="font-bold text-brand-navy">{maskedEmail}</span> to continue to the admin app.
           </p>
+
+          <div className="grid grid-cols-2 gap-3 mb-6 text-left">
+            <div className="rounded-2xl border border-brand-navy/10 bg-brand-navy/5 p-3">
+              <div className="flex items-center gap-2 text-brand-navy mb-1">
+                <Mail size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Delivery</span>
+              </div>
+              <p className="text-sm font-semibold text-brand-navy">{maskedEmail}</p>
+            </div>
+            <div className="rounded-2xl border border-brand-navy/10 bg-brand-navy/5 p-3">
+              <div className="flex items-center gap-2 text-brand-navy mb-1">
+                <Smartphone size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Access</span>
+              </div>
+              <p className="text-sm font-semibold text-brand-navy">Secure step-up check</p>
+            </div>
+          </div>
 
           <div className="flex justify-between gap-2 mb-8">
             {otp.map((digit, index) => (
@@ -112,10 +219,14 @@ export default function OTPVerificationScreen() {
                 ref={el => inputs.current[index] = el}
                 type="text"
                 inputMode="numeric"
+                autoComplete={index === 0 ? "one-time-code" : "off"}
+                maxLength={1}
                 value={digit}
                 onChange={e => handleChange(index, e.target.value)}
                 onKeyDown={e => handleKeyDown(index, e)}
-                className="w-12 h-14 bg-brand-navy/5 border border-brand-navy/10 rounded-lg text-center text-xl font-bold text-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-transparent transition-all"
+                onPaste={handlePaste}
+                aria-label={`OTP digit ${index + 1}`}
+                className="w-11 h-14 sm:w-12 sm:h-16 bg-brand-navy/5 border border-brand-navy/10 rounded-xl text-center text-xl font-bold text-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-transparent transition-all"
               />
             ))}
           </div>

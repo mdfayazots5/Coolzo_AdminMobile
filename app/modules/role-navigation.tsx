@@ -38,6 +38,7 @@ export const ROLE_NAVIGATION: Record<UserRole, AppNavItem[]> = {
     { id: "customers", label: "Customers", path: "/customers", module: "customers", icon: <UserCircle size={20} /> },
     { id: "team", label: "Team", path: "/team", module: "team", icon: <Users size={20} /> },
     { id: "operations", label: "Operations", path: "/operations/dashboard", module: "operations", icon: <Activity size={20} /> },
+    { id: "billing", label: "Billing", path: "/billing/dashboard", module: "billing", icon: <CreditCard size={20} /> },
     { id: "notifications", label: "Notifications", path: "/notifications", module: "settings", icon: <Bell size={20} /> },
     { id: "settings", label: "Settings", path: "/settings", module: "settings", icon: <Settings size={20} /> },
   ],
@@ -104,4 +105,3 @@ export const ROLE_NAVIGATION: Record<UserRole, AppNavItem[]> = {
     { id: "profile", label: "Profile", path: "/profile", module: "dashboard", icon: <UserCircle size={20} /> },
   ],
 };
-

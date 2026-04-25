@@ -16,6 +16,7 @@ import { ArrowLeft, UserPlus, Mail, Shield, Save, Edit3, AtSign } from "lucide-r
 import { toast } from "sonner"
 import { getApiErrorMessage } from "@/core/network/api-error"
 import { useRBAC } from "@/core/auth/RBACProvider"
+import { useAuthStore } from "@/store/auth-store"
 import UnauthorizedScreen from "@/features/error/UnauthorizedScreen"
 
 type FormErrors = Partial<Record<"fullName" | "userName" | "email" | "password" | "roleIds" | "branchId", string>>
@@ -53,6 +54,7 @@ export default function CreateUserScreen() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [isFetching, setIsFetching] = React.useState(true)
   const { canCreate, canEdit } = useRBAC()
+  const authUser = useAuthStore((state) => state.user)
 
   const listPath = isTeamRoute ? "/team" : "/settings/users"
   const detailPath = (userId: string) => isTeamRoute ? `/team/${userId}` : `/settings/users/${userId}`
@@ -65,8 +67,20 @@ export default function CreateUserScreen() {
       try {
         const roleData = await roleRepository.getRoles()
         const branchData = await branchRepository.getBranches()
+        const effectiveBranchData = branchData.length > 0 || !authUser?.branchId
+          ? branchData
+          : [{
+              id: String(authUser.branchId),
+              name: "Current Branch",
+              city: "",
+              address: "",
+              zones: [],
+              isActive: true,
+              technicianCount: 0,
+              srCount: 0,
+            }]
         setRoles(roleData)
-        setBranches(branchData)
+        setBranches(effectiveBranchData)
 
         if (isEditMode && id) {
           const user = await userRepository.getUserById(id)
@@ -84,7 +98,7 @@ export default function CreateUserScreen() {
             password: "",
             isActive: user.status === "active",
             roleIds: user.roleIds,
-            branchId: user.branchId || branchData[0]?.id || "",
+            branchId: user.branchId || effectiveBranchData[0]?.id || "",
           })
           return
         }
@@ -95,13 +109,13 @@ export default function CreateUserScreen() {
             setFormData((current) => ({
               ...current,
               roleIds: [technicianRole.id],
-              branchId: current.branchId || branchData[0]?.id || "",
+              branchId: current.branchId || effectiveBranchData[0]?.id || "",
             }))
           }
         } else {
           setFormData((current) => ({
             ...current,
-            branchId: current.branchId || branchData[0]?.id || "",
+            branchId: current.branchId || effectiveBranchData[0]?.id || "",
           }))
         }
       } catch (error) {
@@ -112,7 +126,7 @@ export default function CreateUserScreen() {
     }
 
     void fetchDependencies()
-  }, [id, isEditMode, isTeamRoute, listPath, navigate])
+  }, [authUser?.branchId, id, isEditMode, isTeamRoute, listPath, navigate])
 
   const updateField = <K extends keyof UserFormState>(field: K, value: UserFormState[K]) => {
     setFormData((current) => ({ ...current, [field]: value }))

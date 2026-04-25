@@ -42,6 +42,7 @@ import { SectionHeader, InlineLoader } from "@/components/shared/Layout"
 import { AdminDropdown } from "@/components/shared/Pickers"
 import { PerformanceKPIBlock } from "@/components/shared/TechnicianCard"
 import { bookingLookupRepository, BookingZoneLookup } from "@/core/network/booking-lookup-repository"
+import { useRBAC } from "@/core/auth/RBACProvider"
 import { getApiErrorMessage } from "@/core/network/api-error"
 import {
   AttendanceRecord,
@@ -222,6 +223,7 @@ function GpsMapRefocus({ center }: { center: [number, number] }) {
 export default function TechnicianDetailScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { canEdit } = useRBAC()
   const [technician, setTechnician] = React.useState<Technician | null>(null)
   const [zones, setZones] = React.useState<BookingZoneLookup[]>([])
   const [attendance, setAttendance] = React.useState<AttendanceRecord[]>([])
@@ -582,10 +584,12 @@ export default function TechnicianDetailScreen() {
           <AdminButton variant="outline" size="sm" onClick={() => void refreshProfile()}>
             Refresh Profile
           </AdminButton>
-          <AdminButton size="sm" onClick={() => navigate(`/team/${technician.id}/edit`)}>
-            <Edit2 size={16} className="mr-2" />
-            Edit Profile
-          </AdminButton>
+          {canEdit("team") && (
+            <AdminButton size="sm" onClick={() => navigate(`/team/${technician.id}/edit`)}>
+              <Edit2 size={16} className="mr-2" />
+              Edit Profile
+            </AdminButton>
+          )}
         </div>
       </div>
 

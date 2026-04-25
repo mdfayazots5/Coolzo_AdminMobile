@@ -4,7 +4,7 @@
  */
 
 import * as React from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, Navigate } from "react-router-dom"
 import { userRepository, User, UserPasswordResetResult } from "@/core/network/user-repository"
 import { branchRepository, Branch } from "@/core/network/branch-repository"
 import { UserRole } from "@/store/auth-store"
@@ -47,7 +47,7 @@ export default function UserDetailScreen() {
   const [credentialKind, setCredentialKind] = React.useState<"password" | "pin">("password")
   const [resetResult, setResetResult] = React.useState<UserPasswordResetResult | null>(null)
   const navigate = useNavigate()
-  const { canEdit } = useRBAC()
+  const { canView, canEdit } = useRBAC()
 
   const loadUser = React.useCallback(async () => {
     if (!id) {
@@ -164,6 +164,10 @@ export default function UserDetailScreen() {
     } catch (error) {
       toast.error("Clipboard access is unavailable")
     }
+  }
+
+  if (!canView("settings")) {
+    return <Navigate to="/unauthorized" replace />
   }
 
   if (isLoading) return <FullPageLoader label="Fetching user profile..." />

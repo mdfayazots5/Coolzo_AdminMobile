@@ -683,13 +683,39 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async getNegativeFeedbackQueue() {
-    const response = await apiClient.get<Feedback[]>("/api/v1/feedback/negative-queue");
-    return response.data;
+    const feedback = await this.getFeedback({ negativeOnly: true });
+    return feedback
+      .filter((item) => item.isNegative)
+      .sort((left, right) => {
+        if (left.rating !== right.rating) {
+          return left.rating - right.rating;
+        }
+
+        return new Date(right.date).getTime() - new Date(left.date).getTime();
+      });
   }
 
   async getFeedbackAnalytics() {
-    const response = await apiClient.get<FeedbackAnalytics>("/api/v1/feedback/analytics");
-    return response.data;
+    const feedback = await this.getFeedback({});
+
+    if (feedback.length === 0) {
+      return {
+        averageRating: 0,
+        npsLabel: "No Reviews Yet",
+        technicianRanking: [],
+      };
+    }
+
+    const totalRating = feedback.reduce((sum, item) => sum + item.rating, 0);
+    const averageRating = totalRating / feedback.length;
+    const negativeCount = feedback.filter((item) => item.isNegative).length;
+    const negativeRatio = negativeCount / feedback.length;
+
+    return {
+      averageRating,
+      npsLabel: getFeedbackHealthLabel(averageRating, negativeRatio),
+      technicianRanking: buildTechnicianRanking(feedback),
+    };
   }
 
   async getComplaintHeatmap() {
@@ -854,6 +880,45 @@ const buildAgentPerformance = (tickets: SupportTicket[]) => {
     response: item.name === "Unassigned" ? "N/A" : "18m",
     rating: item.name === "Unassigned" ? 0 : 4.6,
   }));
+};
+
+const getFeedbackHealthLabel = (averageRating: number, negativeRatio: number) => {
+  if (averageRating >= 4.5 && negativeRatio <= 0.1) return "Excellent";
+  if (averageRating >= 4 && negativeRatio <= 0.2) return "Healthy";
+  if (averageRating >= 3) return "Needs Attention";
+  return "Critical";
+};
+
+const buildTechnicianRanking = (feedback: Feedback[]) => {
+  const grouped = new Map<string, { technicianName: string; totalRating: number; reviewCount: number }>();
+
+  feedback.forEach((item) => {
+    const technicianName = item.technicianName?.trim() || "Unassigned";
+    const current = grouped.get(technicianName) ?? {
+      technicianName,
+      totalRating: 0,
+      reviewCount: 0,
+    };
+
+    current.totalRating += item.rating;
+    current.reviewCount += 1;
+    grouped.set(technicianName, current);
+  });
+
+  return Array.from(grouped.values())
+    .map((item) => ({
+      technicianName: item.technicianName,
+      rating: item.reviewCount > 0 ? item.totalRating / item.reviewCount : 0,
+      reviewCount: item.reviewCount,
+    }))
+    .sort((left, right) => {
+      if (right.rating !== left.rating) {
+        return right.rating - left.rating;
+      }
+
+      return right.reviewCount - left.reviewCount;
+    })
+    .slice(0, 5);
 };
 
 export const supportRepository: SupportRepository = isDemoMode()

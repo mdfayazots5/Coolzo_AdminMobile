@@ -36,6 +36,8 @@ const createLineItem = (id: string): InvoiceLineItem => ({
 
 export default function CreateManualInvoice() {
   const navigate = useNavigate()
+  const dueDateFieldId = React.useId()
+  const notesFieldId = React.useId()
   const [customerId, setCustomerId] = React.useState("")
   const [customerName, setCustomerName] = React.useState("")
   const [customerType, setCustomerType] = React.useState<CustomerType>("individual")
@@ -141,8 +143,9 @@ export default function CreateManualInvoice() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Due Date</label>
+                <label htmlFor={dueDateFieldId} className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Due Date</label>
                 <input
+                  id={dueDateFieldId}
                   type="date"
                   value={dueDate}
                   onChange={(event) => setDueDate(event.target.value)}
@@ -165,8 +168,9 @@ export default function CreateManualInvoice() {
                 />
               </div>
               <div>
-                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Billing Notes</label>
+                <label htmlFor={notesFieldId} className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted">Billing Notes</label>
                 <textarea
+                  id={notesFieldId}
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Internal notes or payment instructions..."
@@ -254,10 +258,13 @@ function Field({
   placeholder?: string
   compact?: boolean
 }) {
+  const fieldId = React.useId()
+
   return (
     <div>
-      <label className={cn("mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted", compact && "ml-2")}>{label}</label>
+      <label htmlFor={fieldId} className={cn("mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted", compact && "ml-2")}>{label}</label>
       <input
+        id={fieldId}
         type="text"
         value={value}
         placeholder={placeholder}
@@ -279,10 +286,13 @@ function NumericField({
   onChange: (value: number) => void
   compact?: boolean
 }) {
+  const fieldId = React.useId()
+
   return (
     <div>
-      <label className={cn("mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted", compact && "ml-2")}>{label}</label>
+      <label htmlFor={fieldId} className={cn("mb-1 ml-4 block text-[10px] font-bold uppercase tracking-widest text-brand-muted", compact && "ml-2")}>{label}</label>
       <input
+        id={fieldId}
         type="number"
         value={value}
         onChange={(event) => onChange(Number(event.target.value) || 0)}

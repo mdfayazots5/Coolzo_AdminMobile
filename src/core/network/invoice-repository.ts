@@ -156,6 +156,218 @@ export interface InvoiceRepository {
   markBadDebt(id: string): Promise<Invoice>;
 }
 
+interface BackendInvoiceListItem {
+  invoiceId: number;
+  invoiceNumber: string;
+  quotationId: number;
+  quotationNumber: string;
+  customerName: string;
+  currentStatus: string;
+  grandTotalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  invoiceDateUtc: string;
+}
+
+interface BackendInvoiceLineItem {
+  invoiceLineId: number;
+  quotationLineId?: number | null;
+  lineType: string;
+  lineDescription: string;
+  quantity: number;
+  unitPrice: number;
+  lineAmount: number;
+}
+
+interface BackendPaymentReceipt {
+  receiptNumber: string;
+}
+
+interface BackendPaymentRecord {
+  paymentTransactionId: number;
+  invoiceId: number;
+  paymentMethod: string;
+  referenceNumber: string;
+  paidAmount: number;
+  paymentDateUtc: string;
+  transactionRemarks: string;
+  receipt?: BackendPaymentReceipt | null;
+}
+
+interface BackendInvoiceVersionEntry {
+  billingStatusHistoryId: number;
+  entityType: string;
+  statusName: string;
+  remarks: string;
+  statusDateUtc: string;
+  changedBy: string;
+}
+
+interface BackendInvoiceDetail {
+  invoiceId: number;
+  invoiceNumber: string;
+  quotationId: number;
+  quotationNumber: string;
+  customerId: number;
+  customerName: string;
+  mobileNumber: string;
+  addressSummary: string;
+  serviceName: string;
+  currentStatus: string;
+  invoiceDateUtc: string;
+  subTotalAmount: number;
+  discountAmount: number;
+  taxPercentage: number;
+  taxAmount: number;
+  grandTotalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  lastPaymentDateUtc?: string | null;
+  lines: BackendInvoiceLineItem[];
+  payments: BackendPaymentRecord[];
+  billingHistory: BackendInvoiceVersionEntry[];
+}
+
+const normalizeInvoiceStatus = (status?: string | null): InvoiceStatus => {
+  switch ((status ?? "").replace(/[\s-]/g, "_").toLowerCase()) {
+    case "draft":
+      return "draft";
+    case "sent":
+      return "sent";
+    case "partially_paid":
+    case "partialpaid":
+      return "partially_paid";
+    case "paid":
+      return "paid";
+    case "overdue":
+      return "overdue";
+    case "cancelled":
+      return "cancelled";
+    case "bad_debt":
+    case "baddebt":
+      return "bad_debt";
+    default:
+      return "unpaid";
+  }
+};
+
+const normalizePaymentMethod = (method?: string | null): PaymentMethod => {
+  switch ((method ?? "").replace(/[\s-]/g, "_").toLowerCase()) {
+    case "cheque":
+      return "cheque";
+    case "bank_transfer":
+    case "banktransfer":
+      return "bank_transfer";
+    case "online":
+    case "upi":
+    case "card":
+      return "online";
+    default:
+      return "cash";
+  }
+};
+
+const normalizeInvoiceLineType = (lineType?: string | null): InvoiceLineItemType => {
+  switch ((lineType ?? "").replace(/[\s-]/g, "_").toLowerCase()) {
+    case "part":
+      return "part";
+    case "visit_charge":
+    case "visitcharge":
+      return "visit_charge";
+    case "discount":
+      return "discount";
+    case "tax":
+      return "tax";
+    default:
+      return "service";
+  }
+};
+
+const mapInvoiceLineItem = (line: BackendInvoiceLineItem): InvoiceLineItem => ({
+  id: String(line.invoiceLineId),
+  description: line.lineDescription,
+  quantity: Number(line.quantity),
+  unitPrice: Number(line.unitPrice),
+  total: Number(line.lineAmount),
+  type: normalizeInvoiceLineType(line.lineType),
+});
+
+const mapPaymentRecord = (payment: BackendPaymentRecord): PaymentRecord => ({
+  id: String(payment.paymentTransactionId),
+  amount: Number(payment.paidAmount),
+  method: normalizePaymentMethod(payment.paymentMethod),
+  reference: payment.receipt?.receiptNumber || payment.referenceNumber || "N/A",
+  date: payment.paymentDateUtc,
+  notes: payment.transactionRemarks || undefined,
+});
+
+const mapInvoiceVersionEntry = (entry: BackendInvoiceVersionEntry, index: number): InvoiceVersionEntry => ({
+  id: String(entry.billingStatusHistoryId),
+  version: index + 1,
+  changeReason: entry.remarks || entry.statusName,
+  changedBy: entry.changedBy || "System",
+  changedAt: entry.statusDateUtc,
+  summary: `${entry.entityType}: ${entry.statusName}`,
+});
+
+const mapBackendInvoiceListItem = (invoice: BackendInvoiceListItem): Invoice => ({
+  id: String(invoice.invoiceId),
+  invoiceNumber: invoice.invoiceNumber,
+  srId: String(invoice.quotationId || ""),
+  srNumber: invoice.quotationNumber || "",
+  customerId: "",
+  customerName: invoice.customerName,
+  customerType: "individual",
+  technicianName: "",
+  issueDate: invoice.invoiceDateUtc,
+  dueDate: invoice.invoiceDateUtc,
+  status: normalizeInvoiceStatus(invoice.currentStatus),
+  items: [],
+  subtotal: Number(invoice.grandTotalAmount),
+  discountTotal: 0,
+  taxTotal: 0,
+  netPayable: Number(invoice.grandTotalAmount),
+  amountPaid: Number(invoice.paidAmount),
+  balanceDue: Number(invoice.balanceAmount),
+  paymentHistory: [],
+  creditNotes: [],
+  versionHistory: [],
+  version: 1,
+  isBadDebt: normalizeInvoiceStatus(invoice.currentStatus) === "bad_debt",
+});
+
+const mapBackendInvoiceDetail = (invoice: BackendInvoiceDetail): Invoice => {
+  const status = normalizeInvoiceStatus(invoice.currentStatus);
+  const paymentHistory = (invoice.payments ?? []).map(mapPaymentRecord);
+  const versionHistory = (invoice.billingHistory ?? []).map(mapInvoiceVersionEntry);
+
+  return {
+    id: String(invoice.invoiceId),
+    invoiceNumber: invoice.invoiceNumber,
+    srId: String(invoice.quotationId || ""),
+    srNumber: invoice.quotationNumber || "",
+    customerId: String(invoice.customerId),
+    customerName: invoice.customerName,
+    customerType: "individual",
+    technicianName: invoice.serviceName || "",
+    issueDate: invoice.invoiceDateUtc,
+    dueDate: invoice.lastPaymentDateUtc || invoice.invoiceDateUtc,
+    status,
+    items: (invoice.lines ?? []).map(mapInvoiceLineItem),
+    subtotal: Number(invoice.subTotalAmount),
+    discountTotal: Number(invoice.discountAmount),
+    taxTotal: Number(invoice.taxAmount),
+    netPayable: Number(invoice.grandTotalAmount),
+    amountPaid: Number(invoice.paidAmount),
+    balanceDue: Number(invoice.balanceAmount),
+    paymentHistory,
+    creditNotes: [],
+    versionHistory,
+    version: Math.max(versionHistory.length, 1),
+    isBadDebt: status === "bad_debt",
+  };
+};
+
 const cloneInvoice = (invoice: Invoice): Invoice => ({
   ...invoice,
   items: invoice.items.map((item) => ({ ...item })),
@@ -515,13 +727,13 @@ export class MockInvoiceRepository implements InvoiceRepository {
 
 export class LiveInvoiceRepository implements InvoiceRepository {
   async getInvoices(filters: InvoiceListFilters) {
-    const response = await apiClient.get<Invoice[]>("/api/v1/invoices", { params: filters });
-    return response.data;
+    const response = await apiClient.get<BackendInvoiceListItem[]>("/api/v1/invoices", { params: filters });
+    return response.data.map(mapBackendInvoiceListItem);
   }
 
   async getInvoiceById(id: string) {
-    const response = await apiClient.get<Invoice>(`/api/v1/invoices/${id}`);
-    return response.data;
+    const response = await apiClient.get<BackendInvoiceDetail>(`/api/v1/invoices/${id}`);
+    return mapBackendInvoiceDetail(response.data);
   }
 
   async createInvoice(invoice: Partial<Invoice>) {

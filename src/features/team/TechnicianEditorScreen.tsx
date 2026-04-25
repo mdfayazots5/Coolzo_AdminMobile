@@ -4,7 +4,7 @@
  */
 
 import * as React from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Plus, Save, Trash2, UserCog } from "lucide-react"
 import { toast } from "sonner"
 import { AdminCard } from "@/components/shared/Cards"
@@ -21,6 +21,7 @@ import {
   UpdateTechnicianInput,
 } from "@/core/network/technician-repository"
 import { getApiErrorMessage } from "@/core/network/api-error"
+import { useRBAC } from "@/core/auth/RBACProvider"
 
 type FormErrors = Partial<Record<"name" | "phone" | "email" | "baseZoneId" | "maxDailyAssignments", string>>
 
@@ -52,6 +53,7 @@ export default function TechnicianEditorScreen() {
   const { id } = useParams<{ id: string }>()
   const isEditMode = Boolean(id)
   const navigate = useNavigate()
+  const { canCreate, canEdit } = useRBAC()
   const [form, setForm] = React.useState<FormState>(emptyForm)
   const [zones, setZones] = React.useState<BookingZoneLookup[]>([])
   const [selectedZoneIds, setSelectedZoneIds] = React.useState<string[]>([])
@@ -62,6 +64,8 @@ export default function TechnicianEditorScreen() {
   const [errors, setErrors] = React.useState<FormErrors>({})
   const [isFetching, setIsFetching] = React.useState(true)
   const [isSaving, setIsSaving] = React.useState(false)
+
+  const canMutate = isEditMode ? canEdit("team") : canCreate("team")
 
   React.useEffect(() => {
     const load = async () => {
@@ -236,6 +240,10 @@ export default function TechnicianEditorScreen() {
 
   if (isFetching) {
     return <InlineLoader className="h-screen" />
+  }
+
+  if (!canMutate) {
+    return <Navigate to="/unauthorized" replace />
   }
 
   return (
