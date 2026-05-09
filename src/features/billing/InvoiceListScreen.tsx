@@ -5,7 +5,7 @@
 
 import * as React from "react"
 import { motion } from "motion/react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 import {
   AlertCircle,
@@ -34,22 +34,46 @@ import { cn } from "@/lib/utils"
 
 export default function InvoiceListScreen() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [dashboard, setDashboard] = React.useState<AccountsReceivableDashboard | null>(null)
   const [invoices, setInvoices] = React.useState<Invoice[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [errorMessage, setErrorMessage] = React.useState("")
-  const [filter, setFilter] = React.useState<InvoiceStatus | "all">("all")
-  const [searchQuery, setSearchQuery] = React.useState("")
+  const [filter, setFilter] = React.useState<InvoiceStatus | "all">(() => parseInvoiceFilter(searchParams.get("status")))
+  const [searchQuery, setSearchQuery] = React.useState(() => searchParams.get("search") ?? "")
+
+  React.useEffect(() => {
+    const nextFilter = parseInvoiceFilter(searchParams.get("status"))
+    const nextSearch = searchParams.get("search") ?? ""
+
+    setFilter((current) => current === nextFilter ? current : nextFilter)
+    setSearchQuery((current) => current === nextSearch ? current : nextSearch)
+  }, [searchParams])
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true)
     setErrorMessage("")
     try {
       const [invoiceData, arDashboard] = await Promise.all([
-        invoiceRepository.getInvoices({ status: filter, search: searchQuery }),
+        invoiceRepository.getInvoices({ status: filter }),
         invoiceRepository.getAccountsReceivableDashboard(),
       ])
-      setInvoices(invoiceData)
+      const overdueLookup = new Map(arDashboard.overdueInvoices.map((invoice) => [invoice.id, invoice]))
+      setInvoices(
+        invoiceData.map((invoice) => {
+          const overdueInvoice = overdueLookup.get(invoice.id)
+          if (!overdueInvoice) {
+            return invoice
+          }
+
+          return {
+            ...invoice,
+            status: "overdue",
+            dueDate: overdueInvoice.dueDate,
+            balanceDue: overdueInvoice.balanceDue,
+          }
+        }),
+      )
       setDashboard(arDashboard)
     } catch (error) {
       setInvoices([])
@@ -97,12 +121,13 @@ export default function InvoiceListScreen() {
 
   const filteredInvoices = invoices
     .filter((invoice) => {
+      const matchesFilter = filter === "all" || invoice.status === filter
       const normalizedQuery = searchQuery.trim().toLowerCase()
       if (!normalizedQuery) {
-        return true
+        return matchesFilter
       }
 
-      return (
+      return matchesFilter && (
         invoice.invoiceNumber.toLowerCase().includes(normalizedQuery) ||
         invoice.customerName.toLowerCase().includes(normalizedQuery) ||
         invoice.srNumber.toLowerCase().includes(normalizedQuery)
@@ -211,15 +236,19 @@ export default function InvoiceListScreen() {
             type="text"
             placeholder="Search by invoice, customer, or SR number..."
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => {
+              const nextSearch = event.target.value
+              setSearchQuery(nextSearch)
+              setSearchParams(buildInvoiceSearchParams(filter, nextSearch), { replace: true })
+            }}
             className="w-full rounded-2xl border border-border bg-white py-3 pl-12 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label="All" />
-          <FilterButton active={filter === "unpaid"} onClick={() => setFilter("unpaid")} label="Unpaid" />
-          <FilterButton active={filter === "paid"} onClick={() => setFilter("paid")} label="Paid" />
-          <FilterButton active={filter === "overdue"} onClick={() => setFilter("overdue")} label="Overdue" />
+          <FilterButton active={filter === "all"} onClick={() => handleFilterChange("all", searchQuery, setFilter, setSearchParams)} label="All" />
+          <FilterButton active={filter === "unpaid"} onClick={() => handleFilterChange("unpaid", searchQuery, setFilter, setSearchParams)} label="Unpaid" />
+          <FilterButton active={filter === "paid"} onClick={() => handleFilterChange("paid", searchQuery, setFilter, setSearchParams)} label="Paid" />
+          <FilterButton active={filter === "overdue"} onClick={() => handleFilterChange("overdue", searchQuery, setFilter, setSearchParams)} label="Overdue" />
         </div>
       </div>
 
@@ -327,6 +356,47 @@ export default function InvoiceListScreen() {
       </div>
     </div>
   )
+}
+
+function parseInvoiceFilter(value: string | null): InvoiceStatus | "all" {
+  switch (value) {
+    case "unpaid":
+    case "paid":
+    case "overdue":
+    case "draft":
+    case "sent":
+    case "partially_paid":
+    case "cancelled":
+    case "bad_debt":
+      return value
+    default:
+      return "all"
+  }
+}
+
+function buildInvoiceSearchParams(filter: InvoiceStatus | "all", searchQuery: string) {
+  const params = new URLSearchParams()
+
+  if (filter !== "all") {
+    params.set("status", filter)
+  }
+
+  const normalizedSearch = searchQuery.trim()
+  if (normalizedSearch) {
+    params.set("search", normalizedSearch)
+  }
+
+  return params
+}
+
+function handleFilterChange(
+  nextFilter: InvoiceStatus | "all",
+  searchQuery: string,
+  setFilter: React.Dispatch<React.SetStateAction<InvoiceStatus | "all">>,
+  setSearchParams: ReturnType<typeof useSearchParams>[1],
+) {
+  setFilter(nextFilter)
+  setSearchParams(buildInvoiceSearchParams(nextFilter, searchQuery), { replace: true })
 }
 
 function FilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {

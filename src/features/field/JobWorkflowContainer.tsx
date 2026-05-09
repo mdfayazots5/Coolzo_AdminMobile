@@ -42,8 +42,7 @@ type PartsRequestDraft = {
   notes: string;
   items: Array<{
     id: string;
-    partCode: string;
-    partName: string;
+    partId: string;
     quantityRequested: string;
     remarks: string;
   }>;
@@ -74,8 +73,7 @@ const createId = () => `draft-${Date.now()}-${Math.random().toString(16).slice(2
 
 const createPartItem = () => ({
   id: createId(),
-  partCode: "",
-  partName: "",
+  partId: "",
   quantityRequested: "1",
   remarks: "",
 });
@@ -340,7 +338,7 @@ export default function JobWorkflowContainer() {
       return;
     }
 
-    const validItems = partsDraft.items.filter((item) => item.partCode.trim() && item.partName.trim());
+    const validItems = partsDraft.items.filter((item) => Number(item.partId) > 0);
     if (validItems.length === 0) {
       toast.error("Add at least one part item before submitting.");
       return;
@@ -352,8 +350,7 @@ export default function JobWorkflowContainer() {
         urgency: partsDraft.urgency,
         notes: partsDraft.notes,
         items: validItems.map((item) => ({
-          partCode: item.partCode.trim(),
-          partName: item.partName.trim(),
+          partId: Number(item.partId),
           quantityRequested: Number(item.quantityRequested || "0"),
           remarks: item.remarks,
         })),
@@ -816,13 +813,14 @@ export default function JobWorkflowContainer() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <input
                       className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition focus:border-brand-gold/40"
-                      placeholder="Part code"
-                      value={item.partCode}
+                      placeholder="Part ID"
+                      type="number"
+                      value={item.partId}
                       onChange={(event) =>
                         setPartsDraft((current) => ({
                           ...current,
                           items: current.items.map((entry) =>
-                            entry.id === item.id ? { ...entry, partCode: event.target.value } : entry,
+                            entry.id === item.id ? { ...entry, partId: event.target.value } : entry,
                           ),
                         }))
                       }
@@ -842,19 +840,6 @@ export default function JobWorkflowContainer() {
                       }
                     />
                   </div>
-                  <input
-                    className="rounded-2xl border border-border px-4 py-3 text-sm outline-none transition focus:border-brand-gold/40"
-                    placeholder="Part name"
-                    value={item.partName}
-                    onChange={(event) =>
-                      setPartsDraft((current) => ({
-                        ...current,
-                        items: current.items.map((entry) =>
-                          entry.id === item.id ? { ...entry, partName: event.target.value } : entry,
-                        ),
-                      }))
-                    }
-                  />
                   <textarea
                     className="min-h-[90px] rounded-2xl border border-border p-4 text-sm outline-none transition focus:border-brand-gold/40"
                     placeholder="Item remarks"

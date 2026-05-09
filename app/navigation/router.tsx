@@ -48,6 +48,7 @@ import AMCAutoScheduleBoard from "../../src/features/operations/scheduling/AMCAu
 import TechnicianHomeDashboard from "../../src/features/field/TechnicianHomeDashboard";
 import MyJobsList from "../../src/features/field/MyJobsList";
 import JobWorkflowContainer from "../../src/features/field/JobWorkflowContainer";
+import TechnicianJobReportScreen from "../../src/features/field/TechnicianJobReportScreen";
 import HelperJobView from "../../src/features/field/HelperJobView";
 import AttendanceScreen from "../../src/features/field/AttendanceScreen";
 import AMCDashboard from "../../src/features/amc/AMCDashboard";
@@ -69,10 +70,12 @@ import ReportQualityDashboard from "../../src/features/estimates/ReportQualityDa
 import InventoryDashboard from "../../src/features/inventory/InventoryDashboard";
 import PartsCatalogList from "../../src/features/inventory/PartsCatalogList";
 import PartDetail from "../../src/features/inventory/PartDetail";
+import PartEditorScreen from "../../src/features/inventory/PartEditorScreen";
 import PartsRequestQueue from "../../src/features/inventory/PartsRequestQueue";
 import PartsRequestDetail from "../../src/features/inventory/PartsRequestDetail";
 import StockMovementLedger from "../../src/features/inventory/StockMovementLedger";
 import PurchaseOrderList from "../../src/features/inventory/PurchaseOrderList";
+import PurchaseOrderCreateScreen from "../../src/features/inventory/PurchaseOrderCreateScreen";
 import PurchaseOrderDetail from "../../src/features/inventory/PurchaseOrderDetail";
 import SupplierManagement from "../../src/features/inventory/SupplierManagement";
 import InvoiceListScreen from "../../src/features/billing/InvoiceListScreen";
@@ -204,6 +207,7 @@ const routes = [
   { path: "/field/jobs", element: <AuthGuard><RoleGuard module="jobs"><MyJobsList /></RoleGuard></AuthGuard> },
   { path: "/field/job/:id", element: <AuthGuard><RoleGuard module="jobs"><JobWorkflowContainer /></RoleGuard></AuthGuard> },
   { path: "/field/helper/job/:id", element: <AuthGuard><RoleGuard module="jobs"><HelperJobView /></RoleGuard></AuthGuard> },
+  { path: "/field/report/:id", element: <AuthGuard><RoleGuard module="jobs"><TechnicianJobReportScreen /></RoleGuard></AuthGuard> },
   { path: "/attendance", element: <AuthGuard><RoleGuard module="attendance"><AttendanceScreen /></RoleGuard></AuthGuard> },
   { path: "/amc/dashboard", element: <AuthGuard><RoleGuard module="amc"><AMCDashboard /></RoleGuard></AuthGuard> },
   { path: "/amc/contracts", element: <AuthGuard><RoleGuard module="amc"><AMCContractList /></RoleGuard></AuthGuard> },
@@ -223,11 +227,14 @@ const routes = [
   { path: "/job-reports/dashboard", element: <AuthGuard><RoleGuard module="amc"><ReportQualityDashboard /></RoleGuard></AuthGuard> },
   { path: "/inventory", element: <AuthGuard><RoleGuard module="inventory"><InventoryDashboard /></RoleGuard></AuthGuard> },
   { path: "/inventory/catalog", element: <AuthGuard><RoleGuard module="inventory"><PartsCatalogList /></RoleGuard></AuthGuard> },
+  { path: "/inventory/catalog/create", element: <AuthGuard><RoleGuard module="inventory"><PartEditorScreen /></RoleGuard></AuthGuard> },
   { path: "/inventory/catalog/:id", element: <AuthGuard><RoleGuard module="inventory"><PartDetail /></RoleGuard></AuthGuard> },
+  { path: "/inventory/catalog/:id/edit", element: <AuthGuard><RoleGuard module="inventory"><PartEditorScreen /></RoleGuard></AuthGuard> },
   { path: "/inventory/requests", element: <AuthGuard><RoleGuard module="inventory"><PartsRequestQueue /></RoleGuard></AuthGuard> },
   { path: "/inventory/requests/:id", element: <AuthGuard><RoleGuard module="inventory"><PartsRequestDetail /></RoleGuard></AuthGuard> },
   { path: "/inventory/ledger", element: <AuthGuard><RoleGuard module="inventory"><StockMovementLedger /></RoleGuard></AuthGuard> },
   { path: "/inventory/orders", element: <AuthGuard><RoleGuard module="inventory"><PurchaseOrderList /></RoleGuard></AuthGuard> },
+  { path: "/inventory/orders/new", element: <AuthGuard><RoleGuard module="inventory"><PurchaseOrderCreateScreen /></RoleGuard></AuthGuard> },
   { path: "/inventory/orders/:id", element: <AuthGuard><RoleGuard module="inventory"><PurchaseOrderDetail /></RoleGuard></AuthGuard> },
   { path: "/inventory/suppliers", element: <AuthGuard><RoleGuard module="inventory"><SupplierManagement /></RoleGuard></AuthGuard> },
   { path: "/billing", element: <Navigate to="/billing/dashboard" replace /> },

@@ -105,7 +105,7 @@ export default function InventoryDashboard() {
           >
             {errorMessage ? "Retry" : "Stock Audit"}
           </AdminButton>
-          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/catalog')}>Add New Part</AdminButton>
+          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/catalog/create')}>Add New Part</AdminButton>
         </div>
       </div>
 
@@ -204,7 +204,7 @@ export default function InventoryDashboard() {
         <AdminCard className="lg:col-span-1 p-8">
           <div className="flex items-center justify-between mb-6">
             <SectionHeader title="Low Stock Alerts" icon={<AlertTriangle size={18} />} />
-            <button className="text-xs font-bold text-brand-gold uppercase tracking-widest hover:underline" onClick={() => navigate('/inventory/catalog?status=low')}>View All</button>
+            <button className="text-xs font-bold text-brand-gold uppercase tracking-widest hover:underline" onClick={() => navigate('/inventory/catalog?status=low_stock')}>View All</button>
           </div>
           <div className="space-y-4">
             {lowStockAlerts.map((item) => (

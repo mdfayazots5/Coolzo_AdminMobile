@@ -148,6 +148,8 @@ export interface OperationsDashboardRepository {
   getLiveMap(): Promise<OperationsLiveMap>;
 }
 
+let liveMapRequest: Promise<OperationsLiveMap> | null = null;
+
 interface BackendOperationsDashboardSummary {
   totalJobs: number;
   pendingQueueCount: number;
@@ -637,40 +639,49 @@ export class LiveOperationsDashboardRepository implements OperationsDashboardRep
   }
 
   async getLiveMap(): Promise<OperationsLiveMap> {
-    const response = await apiClient.get<BackendOperationsLiveMap>("/api/dashboard/live-map");
+    if (liveMapRequest) {
+      return liveMapRequest;
+    }
 
-    return {
-      generatedAt: response.data.generatedOnUtc,
-      technicianPins: response.data.technicianPins.map((pin) => ({
-        id: String(pin.technicianId),
-        code: pin.technicianCode,
-        name: pin.technicianName,
-        status: normalizeTechnicianStatus(pin.availabilityStatus),
-        currentJobId: pin.currentServiceRequestNumber || undefined,
-        baseZone: pin.baseZoneName || undefined,
-        lat: pin.latitude,
-        lng: pin.longitude,
-        trackedOn: pin.trackedOnUtc,
-        breadcrumbs: pin.breadcrumbs.map((point) => ({
-          lat: point.latitude,
-          lng: point.longitude,
-          trackedOn: point.trackedOnUtc,
+    liveMapRequest = apiClient
+      .get<BackendOperationsLiveMap>("/api/dashboard/live-map")
+      .then((response) => ({
+        generatedAt: response.data.generatedOnUtc,
+        technicianPins: response.data.technicianPins.map((pin) => ({
+          id: String(pin.technicianId),
+          code: pin.technicianCode,
+          name: pin.technicianName,
+          status: normalizeTechnicianStatus(pin.availabilityStatus),
+          currentJobId: pin.currentServiceRequestNumber || undefined,
+          baseZone: pin.baseZoneName || undefined,
+          lat: pin.latitude,
+          lng: pin.longitude,
+          trackedOn: pin.trackedOnUtc,
+          breadcrumbs: pin.breadcrumbs.map((point) => ({
+            lat: point.latitude,
+            lng: point.longitude,
+            trackedOn: point.trackedOnUtc,
+          })),
         })),
-      })),
-      serviceRequestPins: response.data.serviceRequestPins.map((pin) => ({
-        id: String(pin.serviceRequestId),
-        srNumber: pin.serviceRequestNumber,
-        customerName: pin.customerName,
-        serviceName: pin.serviceName,
-        status: normalizeStatus(pin.currentStatus),
-        priority: normalizePriority(pin.priority),
-        zoneName: pin.zoneName || "Unassigned",
-        address: pin.addressSummary,
-        assignedTechnicianName: pin.assignedTechnicianName || undefined,
-        lat: pin.latitude,
-        lng: pin.longitude,
-      })),
-    };
+        serviceRequestPins: response.data.serviceRequestPins.map((pin) => ({
+          id: String(pin.serviceRequestId),
+          srNumber: pin.serviceRequestNumber,
+          customerName: pin.customerName,
+          serviceName: pin.serviceName,
+          status: normalizeStatus(pin.currentStatus),
+          priority: normalizePriority(pin.priority),
+          zoneName: pin.zoneName || "Unassigned",
+          address: pin.addressSummary,
+          assignedTechnicianName: pin.assignedTechnicianName || undefined,
+          lat: pin.latitude,
+          lng: pin.longitude,
+        })),
+      }))
+      .finally(() => {
+        liveMapRequest = null;
+      });
+
+    return liveMapRequest;
   }
 }
 

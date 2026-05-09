@@ -89,16 +89,23 @@ export default function LiveJobMap() {
   const [isLoading, setIsLoading] = React.useState(true)
   const [userPosition, setUserPosition] = React.useState<[number, number] | null>(null)
   const [isLiveGpsEnabled, setIsLiveGpsEnabled] = React.useState(false)
+  const isLoadingMapRef = React.useRef(false)
 
   const isTechnicianView = user?.role === UserRole.TECHNICIAN || user?.role === UserRole.HELPER
 
   const loadMap = React.useCallback(async () => {
+    if (isLoadingMapRef.current) {
+      return
+    }
+
+    isLoadingMapRef.current = true
     try {
       const response = await operationsDashboardRepository.getLiveMap()
       setLiveMap(response)
     } catch {
       toast.error("Failed to load the live operations map")
     } finally {
+      isLoadingMapRef.current = false
       setIsLoading(false)
     }
   }, [])

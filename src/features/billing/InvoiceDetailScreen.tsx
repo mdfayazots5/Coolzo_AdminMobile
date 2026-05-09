@@ -58,6 +58,7 @@ export default function InvoiceDetailScreen() {
   const [creditNoteReason, setCreditNoteReason] = React.useState("")
   const [changeReason, setChangeReason] = React.useState("")
   const [editableItems, setEditableItems] = React.useState<Invoice["items"]>([])
+  const [isDownloading, setIsDownloading] = React.useState(false)
 
   const loadInvoice = React.useCallback(async () => {
     if (!id) {
@@ -188,6 +189,32 @@ export default function InvoiceDetailScreen() {
     }
   }
 
+  const handleDownloadPdf = async () => {
+    if (!invoice) {
+      return
+    }
+
+    setIsDownloading(true)
+    try {
+      const { blob, fileName } = await invoiceRepository.downloadInvoicePdf(invoice.id)
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = objectUrl
+      anchor.download = fileName
+      anchor.rel = "noopener"
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+      toast.success("Invoice PDF download started")
+    } catch (error) {
+      console.error(error)
+      toast.error("Unable to download invoice PDF")
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   if (isLoading) {
     return <InlineLoader className="h-screen" />
   }
@@ -209,7 +236,11 @@ export default function InvoiceDetailScreen() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="rounded-2xl border border-border bg-white p-3 text-brand-navy transition-all hover:border-brand-gold">
+          <button
+            onClick={() => void handleDownloadPdf()}
+            disabled={isDownloading}
+            className="rounded-2xl border border-border bg-white p-3 text-brand-navy transition-all hover:border-brand-gold disabled:cursor-not-allowed disabled:opacity-60"
+          >
             <Download size={18} />
           </button>
           <AdminButton variant="outline" icon={<Send size={18} />} onClick={handleSendInvoice}>

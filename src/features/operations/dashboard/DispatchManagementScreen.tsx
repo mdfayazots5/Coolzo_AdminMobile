@@ -383,15 +383,25 @@ export default function DispatchManagementScreen() {
               </AdminCard>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-border bg-white">
-              <div className="max-w-sm text-center">
-                <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-navy/5 text-brand-navy">
-                  <Search size={24} />
+            <div className="flex h-full items-center justify-center rounded-3xl border border-dashed border-border bg-[linear-gradient(180deg,rgba(27,42,74,0.02),rgba(255,255,255,0.96))]">
+              <div className="max-w-md text-center">
+                <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-[28px] bg-brand-navy/5 text-brand-navy shadow-inner">
+                  <Search size={28} />
                 </div>
-                <h2 className="text-lg font-bold text-brand-navy">Select a queue item</h2>
-                <p className="mt-2 text-sm text-brand-muted">
+                <h2 className="text-xl font-bold text-brand-navy">Select a queue item</h2>
+                <p className="mt-3 text-sm leading-relaxed text-brand-muted">
                   Pick a service request from the left panel to review technician match cards and complete the assignment.
                 </p>
+                <div className="mt-6 grid grid-cols-2 gap-3 text-left">
+                  <div className="rounded-2xl border border-border bg-white p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-brand-muted">Queue</p>
+                    <p className="mt-2 text-sm font-semibold text-brand-navy">{visibleQueue.length} open request{visibleQueue.length === 1 ? "" : "s"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-brand-muted">Action</p>
+                    <p className="mt-2 text-sm font-semibold text-brand-navy">Assign, reassign, or review</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

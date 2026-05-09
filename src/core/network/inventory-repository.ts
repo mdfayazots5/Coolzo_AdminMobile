@@ -23,6 +23,7 @@ export interface Part {
   status: StockStatus;
   imageUrl?: string;
   supplierIds?: string[];
+  isActive?: boolean;
 }
 
 export interface StockMovement {
@@ -255,12 +256,35 @@ export class MockInventoryRepository implements InventoryRepository {
   }
 
   async createPurchaseOrder(po: Partial<PurchaseOrder>) {
+    const supplier = this.suppliers.find((record) => record.id === po.supplierId);
+    const items = (po.items ?? []).map((item) => {
+      const part = this.parts.find((record) => record.id === item.partId);
+      const orderedQty = Number(item.orderedQty ?? 0);
+      const unitPrice = Number(item.unitPrice ?? part?.unitCost ?? 0);
+
+      return {
+        partId: item.partId,
+        partName: item.partName ?? part?.name ?? "Unknown Part",
+        orderedQty,
+        receivedQty: Number(item.receivedQty ?? 0),
+        unitPrice,
+        total: orderedQty * unitPrice,
+      };
+    });
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     const newPO = {
-      ...po,
       id: 'po' + (this.pos.length + 1),
       poNumber: 'PO-' + (1000 + this.pos.length + 1),
+      supplierId: po.supplierId ?? supplier?.id ?? "",
+      supplierName: po.supplierName ?? supplier?.name ?? "Unknown Supplier",
       status: 'submitted',
-      createdAt: new Date().toISOString()
+      items,
+      subtotal,
+      tax: Number(po.tax ?? 0),
+      total: subtotal + Number(po.tax ?? 0),
+      createdAt: new Date().toISOString(),
+      expectedDeliveryDate: po.expectedDeliveryDate ?? new Date(Date.now() + 7 * 86400000).toISOString(),
+      notes: po.notes,
     } as PurchaseOrder;
     this.pos.push(newPO);
     return newPO;
@@ -355,12 +379,12 @@ export class LiveInventoryRepository implements InventoryRepository {
   }
 
   async getPartsRequests(filters: any) {
-    const response = await apiClient.get<PartsRequest[]>('/api/inventory/requests', { params: filters });
+    const response = await apiClient.get<PartsRequest[]>('/api/inventory/parts-requests', { params: filters });
     return response.data;
   }
 
   async getPartsRequestById(id: string) {
-    const response = await apiClient.get<PartsRequest>(`/api/inventory/requests/${id}`);
+    const response = await apiClient.get<PartsRequest>(`/api/inventory/parts-requests/${id}`);
     return response.data;
   }
 

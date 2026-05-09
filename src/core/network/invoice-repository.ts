@@ -141,6 +141,7 @@ export interface ExportInvoicesRequest {
 export interface InvoiceRepository {
   getInvoices(filters: InvoiceListFilters): Promise<Invoice[]>;
   getInvoiceById(id: string): Promise<Invoice | null>;
+  downloadInvoicePdf(id: string): Promise<{ blob: Blob; fileName: string }>;
   createInvoice(invoice: Partial<Invoice>): Promise<Invoice>;
   updateInvoice(id: string, data: Partial<Invoice>, changeReason: string): Promise<Invoice>;
   sendInvoice(id: string): Promise<Invoice>;
@@ -368,6 +369,28 @@ const mapBackendInvoiceDetail = (invoice: BackendInvoiceDetail): Invoice => {
   };
 };
 
+const buildInvoiceListParams = (filters: InvoiceListFilters) => {
+  const params: Record<string, number | string> = {};
+
+  if (filters.status && filters.status !== "all" && filters.status !== "overdue") {
+    params.status = filters.status;
+  }
+
+  if (typeof filters.pageNumber === "number") {
+    params.pageNumber = filters.pageNumber;
+  }
+
+  if (typeof filters.pageSize === "number") {
+    params.pageSize = filters.pageSize;
+  }
+
+  if (filters.customerId?.trim()) {
+    params.customerId = filters.customerId.trim();
+  }
+
+  return params;
+};
+
 const cloneInvoice = (invoice: Invoice): Invoice => ({
   ...invoice,
   items: invoice.items.map((item) => ({ ...item })),
@@ -521,6 +544,27 @@ export class MockInvoiceRepository implements InvoiceRepository {
     await this.wait();
     const invoice = this.invoices.find((item) => item.id === id);
     return invoice ? cloneInvoice(invoice) : null;
+  }
+
+  async downloadInvoicePdf(id: string) {
+    await this.wait();
+    const invoice = this.requireInvoice(id);
+    const blob = new Blob(
+      [
+        [
+          `Invoice ${invoice.invoiceNumber}`,
+          `Customer: ${invoice.customerName}`,
+          `Service Request: ${invoice.srNumber}`,
+          `Net Payable: ${invoice.netPayable.toFixed(2)}`,
+        ].join("\n"),
+      ],
+      { type: "application/pdf" },
+    );
+
+    return {
+      blob,
+      fileName: `invoice-${invoice.invoiceNumber}.pdf`,
+    };
   }
 
   async createInvoice(invoice: Partial<Invoice>) {
@@ -727,13 +771,26 @@ export class MockInvoiceRepository implements InvoiceRepository {
 
 export class LiveInvoiceRepository implements InvoiceRepository {
   async getInvoices(filters: InvoiceListFilters) {
-    const response = await apiClient.get<BackendInvoiceListItem[]>("/api/invoices", { params: filters });
+    const response = await apiClient.get<BackendInvoiceListItem[]>("/api/invoices", {
+      params: buildInvoiceListParams(filters),
+    });
     return response.data.map(mapBackendInvoiceListItem);
   }
 
   async getInvoiceById(id: string) {
     const response = await apiClient.get<BackendInvoiceDetail>(`/api/invoices/${id}`);
     return mapBackendInvoiceDetail(response.data);
+  }
+
+  async downloadInvoicePdf(id: string) {
+    const response = await apiClient.get<Blob>(`/api/invoices/${id}/pdf`, {
+      responseType: "blob" as const,
+    });
+
+    return {
+      blob: response.data,
+      fileName: `invoice-${id}.pdf`,
+    };
   }
 
   async createInvoice(invoice: Partial<Invoice>) {
@@ -765,8 +822,15 @@ export class LiveInvoiceRepository implements InvoiceRepository {
   }
 
   async markAsPaid(id: string, payment: MarkInvoicePaidRequest) {
-    const response = await apiClient.patch<Invoice>(`/api/invoices/${id}/mark-paid`, payment);
-    return response.data;
+    await apiClient.post(`/api/invoices/${id}/mark-paid`, {
+      amount: payment.amount,
+      method: payment.method,
+      reference: payment.reference,
+      notes: payment.notes,
+    });
+
+    const refreshed = await apiClient.get<BackendInvoiceDetail>(`/api/invoices/${id}`);
+    return mapBackendInvoiceDetail(refreshed.data);
   }
 
   async getVersionHistory(id: string) {

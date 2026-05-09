@@ -88,7 +88,9 @@ export default function PartDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<Edit size={18} />}>Edit Part</AdminButton>
+          <AdminButton variant="outline" icon={<Edit size={18} />} onClick={() => navigate(`/inventory/catalog/${part.id}/edit`)}>
+            Edit Part
+          </AdminButton>
           <AdminButton icon={<Plus size={18} />} onClick={() => setIsAdjusting(true)}>Adjust Stock</AdminButton>
         </div>
       </div>
@@ -177,41 +179,54 @@ export default function PartDetail() {
 
       {/* Adjustment Modal */}
       {isAdjusting && (
-        <div className="fixed inset-0 bg-brand-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-brand-navy/60 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setIsAdjusting(false)}
+        >
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-[40px] p-8 w-full max-w-md shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            className="w-[min(100%,30rem)] min-w-[18rem] overflow-hidden rounded-[32px] bg-white p-6 shadow-2xl sm:p-8"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="stock-adjustment-title"
           >
-            <h2 className="text-xl font-bold text-brand-navy mb-2">Manual Stock Adjustment</h2>
-            <p className="text-sm text-brand-muted mb-6">Adjust the current stock level of {part.name}.</p>
+            <h2 id="stock-adjustment-title" className="mb-2 text-xl font-bold text-brand-navy sm:text-2xl">
+              Manual Stock Adjustment
+            </h2>
+            <p className="mb-6 text-sm leading-6 text-brand-muted">
+              Adjust the current stock level of {part.name}.
+            </p>
             
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-6 py-4">
+            <div className="space-y-5">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 rounded-[28px] bg-brand-navy/[0.03] px-4 py-5">
                 <button 
                   onClick={() => setAdjustmentQty(prev => prev - 1)}
-                  className="size-12 rounded-2xl bg-brand-navy/5 flex items-center justify-center text-brand-navy hover:bg-brand-navy/10 transition-colors"
+                  className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-navy/5 text-brand-navy transition-colors hover:bg-brand-navy/10"
                 >
                   <Minus size={20} />
                 </button>
-                <div className="text-center">
-                  <span className={cn("text-4xl font-bold", adjustmentQty > 0 ? "text-status-completed" : adjustmentQty < 0 ? "text-status-emergency" : "text-brand-navy")}>
+                <div className="min-w-0 text-center">
+                  <span className={cn("text-4xl font-bold sm:text-5xl", adjustmentQty > 0 ? "text-status-completed" : adjustmentQty < 0 ? "text-status-emergency" : "text-brand-navy")}>
                     {adjustmentQty > 0 ? '+' : ''}{adjustmentQty}
                   </span>
-                  <p className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">Adjustment</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.28em] text-brand-muted">Adjustment</p>
                 </div>
                 <button 
                   onClick={() => setAdjustmentQty(prev => prev + 1)}
-                  className="size-12 rounded-2xl bg-brand-navy/5 flex items-center justify-center text-brand-navy hover:bg-brand-navy/10 transition-colors"
+                  className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-navy/5 text-brand-navy transition-colors hover:bg-brand-navy/10"
                 >
                   <Plus size={20} />
                 </button>
               </div>
 
               <div>
-                <label className="text-[10px] font-bold text-brand-muted uppercase tracking-widest ml-4 mb-1 block">Reason for Adjustment</label>
+                <label className="mb-1 ml-4 block text-[10px] font-bold uppercase tracking-[0.28em] text-brand-muted">
+                  Reason for Adjustment
+                </label>
                 <select 
-                  className="w-full px-4 py-3 bg-brand-navy/5 border-none rounded-2xl text-sm focus:ring-2 focus:ring-brand-gold outline-none transition-all"
+                  className="w-full appearance-none rounded-2xl border-none bg-brand-navy/5 px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-brand-gold"
                   value={adjustmentReason}
                   onChange={(e) => setAdjustmentReason(e.target.value)}
                 >
@@ -223,7 +238,7 @@ export default function PartDetail() {
                 </select>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="grid grid-cols-2 gap-3 pt-2">
                 <AdminButton variant="outline" className="flex-1" onClick={() => setIsAdjusting(false)}>Cancel</AdminButton>
                 <AdminButton className="flex-1" onClick={handleAdjustment} disabled={adjustmentQty === 0 || !adjustmentReason}>Confirm</AdminButton>
               </div>

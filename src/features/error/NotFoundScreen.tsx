@@ -7,7 +7,7 @@ import * as React from "react"
 import { motion } from "motion/react"
 import { useNavigate } from "react-router-dom"
 import { AdminButton } from "@/components/shared/AdminButton"
-import { Home, ArrowLeft, RefreshCw } from "lucide-react"
+import { Home, ArrowLeft, MapPin } from "lucide-react"
 
 export default function NotFoundScreen() {
   const navigate = useNavigate()
@@ -55,5 +55,3 @@ export default function NotFoundScreen() {
     </div>
   )
 }
-
-import { MapPin } from "lucide-react"

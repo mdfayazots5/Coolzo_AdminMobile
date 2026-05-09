@@ -15,6 +15,7 @@ import {
   UserCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getApiErrorMessage } from "@/core/network/api-error"
 import { AdminCard } from "@/components/shared/Cards";
 import { AdminButton } from "@/components/shared/AdminButton";
 import { InlineLoader } from "@/components/shared/Layout";
@@ -97,7 +98,7 @@ export default function TechnicianHomeDashboard() {
       toast.success(mode === "check-in" ? "Checked in successfully." : "Checked out successfully.");
     } catch (error) {
       console.error(error);
-      toast.error(`Unable to ${mode} right now.`);
+      toast.error(getApiErrorMessage(error, `Unable to ${mode} right now.`));
     } finally {
       setIsSubmittingAttendance(false);
     }
@@ -144,6 +145,7 @@ export default function TechnicianHomeDashboard() {
         onRefresh={loadDashboard}
         onAttendance={handleHelperAttendance}
         onOpenJob={(serviceRequestId) => navigate(`/field/helper/job/${serviceRequestId}`)}
+        canRecordAttendance={Boolean(helperJob?.serviceRequestId)}
       />
     );
   }
@@ -306,8 +308,9 @@ function HelperDashboard(props: {
   onRefresh: () => Promise<void>;
   onAttendance: (mode: "check-in" | "check-out") => Promise<void>;
   onOpenJob: (serviceRequestId: string) => void;
+  canRecordAttendance: boolean;
 }) {
-  const { helperJob, attendance, isSubmittingAttendance, onRefresh, onAttendance, onOpenJob } = props;
+  const { helperJob, attendance, isSubmittingAttendance, onRefresh, onAttendance, onOpenJob, canRecordAttendance } = props;
   const isCheckedIn = Boolean(attendance?.checkInOnUtc && !attendance?.checkOutOnUtc);
   const completedTasks = helperJob?.tasks.filter((task) => task.responseStatus.toLowerCase() !== "pending").length ?? 0;
 
@@ -337,9 +340,10 @@ function HelperDashboard(props: {
           </div>
           <AdminButton
             isLoading={isSubmittingAttendance}
+            disabled={!canRecordAttendance}
             onClick={() => void onAttendance(isCheckedIn ? "check-out" : "check-in")}
           >
-            {isCheckedIn ? "Check Out" : "Check In"}
+            {canRecordAttendance ? (isCheckedIn ? "Check Out" : "Check In") : "Await Assignment"}
           </AdminButton>
         </div>
       </AdminCard>

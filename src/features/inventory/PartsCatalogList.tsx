@@ -25,12 +25,20 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 export default function PartsCatalogList() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialStatus = searchParams.get('status') as StockStatus | 'all' || 'all';
+  const statusParam = searchParams.get('status');
+  const initialStatus: StockStatus | 'all' =
+    statusParam === 'low' ? 'low_stock' :
+    statusParam === 'out' ? 'out_of_stock' :
+    statusParam === 'in' ? 'in_stock' :
+    statusParam === 'in_stock' || statusParam === 'low_stock' || statusParam === 'out_of_stock'
+      ? statusParam
+      : 'all';
 
   const [parts, setParts] = React.useState<Part[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [filter, setFilter] = React.useState<StockStatus | 'all'>(initialStatus)
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [openMenuPartId, setOpenMenuPartId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     const fetchParts = async () => {
@@ -64,7 +72,7 @@ export default function PartsCatalogList() {
         </div>
         <div className="flex gap-2">
           <AdminButton variant="outline" icon={<Download size={18} />}>Export CSV</AdminButton>
-          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/catalog')}>Add New Part</AdminButton>
+          <AdminButton icon={<Plus size={18} />} onClick={() => navigate('/inventory/catalog/create')}>Add New Part</AdminButton>
         </div>
       </div>
 
@@ -136,16 +144,44 @@ export default function PartsCatalogList() {
                     <StatusBadge status={part.status} />
                   </td>
                   <td className="p-6">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="relative flex items-center justify-end gap-2">
                       <button onClick={() => navigate(`/inventory/catalog/${part.id}`)} className="p-2 text-brand-muted hover:text-brand-gold transition-colors">
                         <Eye size={18} />
                       </button>
-                      <button className="p-2 text-brand-muted hover:text-brand-navy transition-colors">
+                      <button
+                        onClick={() => navigate(`/inventory/catalog/${part.id}/edit`)}
+                        className="p-2 text-brand-muted hover:text-brand-navy transition-colors"
+                      >
                         <Edit size={18} />
                       </button>
-                      <button className="p-2 text-brand-muted hover:bg-brand-navy/5 rounded-lg">
+                      <button
+                        onClick={() => setOpenMenuPartId((current) => current === part.id ? null : part.id)}
+                        className="rounded-lg p-2 text-brand-muted hover:bg-brand-navy/5"
+                      >
                         <MoreVertical size={18} />
                       </button>
+                      {openMenuPartId === part.id ? (
+                        <div className="absolute right-0 top-11 z-10 w-40 rounded-2xl border border-border bg-white p-2 shadow-xl">
+                          <button
+                            onClick={() => {
+                              setOpenMenuPartId(null)
+                              navigate(`/inventory/catalog/${part.id}`)
+                            }}
+                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy/5"
+                          >
+                            View Detail
+                          </button>
+                          <button
+                            onClick={() => {
+                              setOpenMenuPartId(null)
+                              navigate(`/inventory/catalog/${part.id}/edit`)
+                            }}
+                            className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-brand-navy transition-colors hover:bg-brand-navy/5"
+                          >
+                            Edit Part
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </td>
                 </motion.tr>

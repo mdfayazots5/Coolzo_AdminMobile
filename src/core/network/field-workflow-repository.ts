@@ -79,6 +79,7 @@ export interface FieldCustomerSignature {
 
 export interface FieldPartsRequestItem {
   id: string;
+  partId: string;
   partCode: string;
   partName: string;
   quantityRequested: number;
@@ -222,8 +223,7 @@ export interface FieldPartsRequestPayload {
   urgency: "Normal" | "Emergency";
   notes?: string;
   items: Array<{
-    partCode: string;
-    partName: string;
+    partId: number;
     quantityRequested: number;
     remarks?: string;
   }>;
@@ -443,6 +443,7 @@ interface BackendFieldCustomerSignatureResponse {
 
 interface BackendFieldPartsRequestItemResponse {
   partsRequestItemId: number;
+  partId?: number | null;
   partCode: string;
   partName: string;
   quantityRequested: number;
@@ -568,6 +569,25 @@ interface BackendHelperAssignmentResponse {
   assignedOnUtc?: string | null;
   releasedOnUtc?: string | null;
 }
+
+const buildEmptyHelperJobView = (helperProfileId: string): HelperJobView => ({
+  helperProfileId,
+  assignmentStatus: "unassigned",
+  technicianId: undefined,
+  technicianName: undefined,
+  serviceRequestId: undefined,
+  serviceRequestNumber: undefined,
+  jobCardId: undefined,
+  jobCardNumber: undefined,
+  customerName: undefined,
+  serviceName: undefined,
+  addressSummary: undefined,
+  assignmentRemarks: "",
+  assignedOnUtc: undefined,
+  releasedOnUtc: undefined,
+  attendance: readHelperAttendance(),
+  tasks: [],
+});
 
 interface BackendHelperTaskResponse {
   helperTaskChecklistId: number;
@@ -800,6 +820,7 @@ const mapPartsRequest = (request: BackendFieldPartsRequestResponse): FieldPartsR
   processedAtUtc: request.processedAtUtc ?? undefined,
   items: request.items.map((item) => ({
     id: String(item.partsRequestItemId),
+    partId: item.partId ? String(item.partId) : "",
     partCode: item.partCode,
     partName: item.partName,
     quantityRequested: item.quantityRequested,
@@ -1283,8 +1304,9 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
           submittedAtUtc: new Date().toISOString(),
           items: payload.items.map((item) => ({
             id: generateId(),
-            partCode: item.partCode,
-            partName: item.partName,
+            partId: String(item.partId),
+            partCode: "",
+            partName: "",
             quantityRequested: item.quantityRequested,
             quantityApproved: 0,
             currentStatus: "Pending",
@@ -1727,6 +1749,12 @@ class LiveFieldWorkflowRepository implements FieldWorkflowRepository {
       saveHelperAssignment(helperView);
       return helperView;
     } catch (error) {
+      if (axios.isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 409)) {
+        const helperView = buildEmptyHelperJobView(helperProfileId);
+        saveHelperAssignment(helperView);
+        return helperView;
+      }
+
       if (axios.isAxiosError(error) && !isOnline()) {
         return readHelperAssignment() ?? null;
       }
@@ -2095,8 +2123,9 @@ class MockFieldWorkflowRepository implements FieldWorkflowRepository {
       submittedAtUtc: new Date().toISOString(),
       items: payload.items.map((item) => ({
         id: generateId(),
-        partCode: item.partCode,
-        partName: item.partName,
+        partId: String(item.partId),
+        partCode: "",
+        partName: "",
         quantityRequested: item.quantityRequested,
         quantityApproved: 0,
         currentStatus: "Pending",

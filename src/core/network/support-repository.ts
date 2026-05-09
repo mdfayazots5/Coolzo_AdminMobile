@@ -521,15 +521,21 @@ interface BackendSupportAnalytics {
   averageResolutionHours: number;
 }
 
-interface BackendCustomerReview {
+interface BackendFeedback {
   customerReviewId: number;
   customerId: number;
-  userName: string;
+  customerName: string;
+  customerPhotoUrl: string;
   rating: number;
   comment: string;
   bookingId?: number | null;
   serviceId?: number | null;
   createdAt: string;
+  feedbackStatus: "published" | "unpublished" | "flagged" | string;
+  adminResponse?: string | null;
+  flagReason?: string | null;
+  moderatedAt?: string | null;
+  moderatedBy?: string | null;
 }
 
 export class LiveSupportRepository implements SupportRepository {
@@ -655,31 +661,31 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async getFeedback(filters: any) {
-    const response = await apiClient.get<BackendCustomerReview[]>("/api/customer-reviews", {
+    const response = await apiClient.get<BackendFeedback[]>("/api/feedback", {
       params: { serviceId: filters?.serviceId },
     });
-    const mapped = response.data.map(mapCustomerReview);
+    const mapped = response.data.map(mapFeedback);
     return mapped.filter((item) => (filters?.negativeOnly ? item.rating <= 2 : true));
   }
 
   async getFeedbackById(id: string) {
-    const all = await this.getFeedback({});
-    return all.find((item) => item.id === id) || null;
+    const response = await apiClient.get<BackendFeedback>(`/api/feedback/${id}`);
+    return mapFeedback(response.data);
   }
 
   async respondToFeedback(id: string, response: string) {
-    const backendResponse = await apiClient.patch<Feedback>(`/api/feedback/${id}/respond`, { response });
-    return backendResponse.data;
+    const backendResponse = await apiClient.patch<BackendFeedback>(`/api/feedback/${id}/respond`, { response });
+    return mapFeedback(backendResponse.data);
   }
 
   async publishFeedback(id: string, publish: boolean) {
-    const backendResponse = await apiClient.patch<Feedback>(`/api/feedback/${id}/publish`, { publish });
-    return backendResponse.data;
+    const backendResponse = await apiClient.patch<BackendFeedback>(`/api/feedback/${id}/publish`, { publish });
+    return mapFeedback(backendResponse.data);
   }
 
   async flagFeedback(id: string, reason: string) {
-    const backendResponse = await apiClient.patch<Feedback>(`/api/feedback/${id}/flag`, { reason });
-    return backendResponse.data;
+    const backendResponse = await apiClient.patch<BackendFeedback>(`/api/feedback/${id}/flag`, { reason });
+    return mapFeedback(backendResponse.data);
   }
 
   async getNegativeFeedbackQueue() {
@@ -719,8 +725,23 @@ export class LiveSupportRepository implements SupportRepository {
   }
 
   async getComplaintHeatmap() {
-    const response = await apiClient.get<ComplaintHeatmapCell[]>("/api/feedback/complaint-heatmap");
-    return response.data;
+    const feedback = await this.getFeedback({});
+    const counts = new Map<string, number>();
+
+    feedback
+      .filter((item) => item.isNegative)
+      .forEach((item) => {
+        const month = item.date.slice(0, 7);
+        const key = `negative_feedback|${month}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+
+    return Array.from(counts.entries())
+      .map(([key, count]) => {
+        const [category, month] = key.split("|");
+        return { category, month, count };
+      })
+      .sort((left, right) => left.month.localeCompare(right.month));
   }
 }
 
@@ -792,12 +813,12 @@ const mapReply = (reply: BackendSupportTicketReply): TicketMessage => ({
   isInternal: reply.isInternalOnly,
 });
 
-const mapCustomerReview = (review: BackendCustomerReview): Feedback => ({
+const mapFeedback = (review: BackendFeedback): Feedback => ({
   id: String(review.customerReviewId),
   srId: review.serviceId ? String(review.serviceId) : "",
   srNumber: review.serviceId ? `SR-${review.serviceId}` : review.bookingId ? `BK-${review.bookingId}` : "Unlinked",
   customerId: String(review.customerId),
-  customerName: review.userName,
+  customerName: review.customerName,
   technicianId: "",
   technicianName: "Unassigned",
   rating: review.rating,
@@ -807,7 +828,8 @@ const mapCustomerReview = (review: BackendCustomerReview): Feedback => ({
     workQuality: review.rating,
   },
   reviewText: review.comment,
-  status: review.rating <= 2 ? "flagged" : "published",
+  adminResponse: review.adminResponse || undefined,
+  status: review.feedbackStatus === "flagged" || review.feedbackStatus === "unpublished" ? review.feedbackStatus : "published",
   date: review.createdAt,
   isNegative: review.rating <= 2,
 });

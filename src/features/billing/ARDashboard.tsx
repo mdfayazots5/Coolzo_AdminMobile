@@ -47,6 +47,30 @@ export default function ARDashboard() {
     }
   }, [])
 
+  const handleExportAgingReport = React.useCallback(() => {
+    if (!dashboard) {
+      return
+    }
+
+    const rows = [
+      ["bucket", "count", "amount"],
+      ...dashboard.aging.map((bucket) => [bucket.label, String(bucket.count), String(bucket.amount)]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n")
+
+    const blob = new Blob([rows], { type: "text/csv;charset=utf-8" })
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = objectUrl
+    anchor.download = `accounts-receivable-aging-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(objectUrl)
+    toast.success("Aging report download started")
+  }, [dashboard])
+
   React.useEffect(() => {
     void loadDashboard()
   }, [loadDashboard])
@@ -85,7 +109,7 @@ export default function ARDashboard() {
           <p className="text-sm text-brand-muted">Aging buckets, overdue recovery, and customer follow-up</p>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="outline" icon={<Download size={18} />} onClick={() => toast.success("AR export prepared")}>
+          <AdminButton variant="outline" icon={<Download size={18} />} onClick={handleExportAgingReport}>
             Export Aging Report
           </AdminButton>
         </div>
