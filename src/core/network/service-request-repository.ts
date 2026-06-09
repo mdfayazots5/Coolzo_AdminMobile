@@ -192,6 +192,7 @@ export interface ServiceRequestRepository {
   getSLAAlerts(): Promise<ServiceRequest[]>;
   getTechnicianJobs(technicianId: string): Promise<ServiceRequest[]>;
   updateJobStatus(id: string, status: SRStatus, location?: { lat: number; lng: number }): Promise<void>;
+  updateCoordinates(srId: string, lat: number, lng: number): Promise<void>;
   submitServiceReport(id: string, reportData: any): Promise<void>;
   submitSignature(id: string, signatureData: { customerName: string; signatureUrl: string }): Promise<void>;
 }
@@ -324,6 +325,8 @@ interface BackendServiceRequestDetail {
   executionTimeline: BackendJobExecutionTimelineItem[];
   statusTimeline: BackendServiceRequestStatusHistoryItem[];
   assignmentHistory: BackendAssignmentHistoryItem[];
+  customerLatitude?: number | null;
+  customerLongitude?: number | null;
 }
 
 interface BackendTechnicianJobListItem {
@@ -708,6 +711,7 @@ const buildBaseServiceRequest = (params: {
   escalationReason?: string;
   startTime?: string;
   endTime?: string;
+  coordinates?: { lat: number; lng: number };
 }) => ({
   id: params.id,
   srNumber: params.srNumber,
@@ -726,6 +730,7 @@ const buildBaseServiceRequest = (params: {
     address: params.address,
     zoneId: params.zone,
     city: params.city,
+    ...(params.coordinates ? { coordinates: params.coordinates } : {}),
   },
   equipment: {
     brand: params.brand,
@@ -847,6 +852,10 @@ const mapAdminDetailToServiceRequest = (detail: BackendServiceRequestDetail): Se
     escalationReason: typeof escalationReason === "string" ? escalationReason : undefined,
     startTime: detail.jobCard.workStartedDateUtc ?? undefined,
     endTime: detail.jobCard.workCompletedDateUtc ?? detail.jobCard.submittedForClosureDateUtc ?? undefined,
+    coordinates:
+      detail.customerLatitude != null && detail.customerLongitude != null
+        ? { lat: detail.customerLatitude, lng: detail.customerLongitude }
+        : undefined,
   });
 };
 
@@ -1355,6 +1364,12 @@ export class MockServiceRequestRepository implements ServiceRequestRepository {
       },
     } as ServiceRequest["fieldWorkflow"];
   }
+
+  async updateCoordinates(srId: string, lat: number, lng: number) {
+    const sr = await this.getSRById(srId);
+    if (!sr) return;
+    sr.location = { ...sr.location, coordinates: { lat, lng } };
+  }
 }
 
 export class LiveServiceRequestRepository implements ServiceRequestRepository {
@@ -1673,6 +1688,10 @@ export class LiveServiceRequestRepository implements ServiceRequestRepository {
     } else if (currentStatus === "workinprogress") {
       await this.postTechnicianAction(id, "mark-work-completed", noteText);
     }
+  }
+
+  async updateCoordinates(srId: string, lat: number, lng: number) {
+    await apiClient.patch(`/api/service-requests/${srId}/coordinates`, { latitude: lat, longitude: lng });
   }
 }
 

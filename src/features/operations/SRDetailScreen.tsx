@@ -31,6 +31,45 @@ import {
 } from "lucide-react"
 import { AdminButton } from "@/components/shared/AdminButton"
 import { toast } from "sonner"
+import L from "leaflet"
+import "leaflet/dist/leaflet.css"
+import * as ReactLeaflet from "react-leaflet"
+import markerIcon from "leaflet/dist/images/marker-icon.png"
+import markerShadow from "leaflet/dist/images/marker-shadow.png"
+
+const { MapContainer, Marker, TileLayer } = ReactLeaflet
+
+const DEFAULT_CENTER: [number, number] = [17.385, 78.4867]
+
+L.Marker.prototype.options.icon = L.icon({
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+})
+
+function DraggablePin({
+  position,
+  onChange,
+}: {
+  position: [number, number]
+  onChange: (lat: number, lng: number) => void
+}) {
+  const markerRef = React.useRef<L.Marker>(null)
+  const eventHandlers = React.useMemo(
+    () => ({
+      dragend() {
+        const marker = markerRef.current
+        if (marker) {
+          const { lat, lng } = marker.getLatLng()
+          onChange(lat, lng)
+        }
+      },
+    }),
+    [onChange],
+  )
+  return <ReactLeaflet.Marker ref={markerRef} position={position} draggable eventHandlers={eventHandlers} />
+}
 
 export default function SRDetailScreen() {
   const { id } = useParams()
@@ -38,6 +77,8 @@ export default function SRDetailScreen() {
   const [sr, setSr] = React.useState<ServiceRequest | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [newNote, setNewNote] = React.useState("")
+  const [isSavingPin, setIsSavingPin] = React.useState(false)
+  const [pinLocation, setPinLocation] = React.useState<[number, number] | null>(null)
   const badgeStatus =
     sr?.status === "pending"
       ? "pending"
@@ -66,6 +107,14 @@ export default function SRDetailScreen() {
     }
     fetchSR();
   }, [refreshSR])
+
+  React.useEffect(() => {
+    if (sr?.location.coordinates) {
+      setPinLocation([sr.location.coordinates.lat, sr.location.coordinates.lng])
+    } else {
+      setPinLocation(DEFAULT_CENTER)
+    }
+  }, [sr?.id, sr?.location.coordinates])
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !sr) return;
@@ -100,6 +149,20 @@ export default function SRDetailScreen() {
     } catch (error) {
       console.error(error)
       toast.error("Failed to cancel service request")
+    }
+  }
+
+  const handleSavePin = async () => {
+    if (!sr || !pinLocation) return
+    setIsSavingPin(true)
+    try {
+      await serviceRequestRepository.updateCoordinates(sr.id, pinLocation[0], pinLocation[1])
+      await refreshSR()
+      toast.success("Location pin saved — SR will now appear on the live map")
+    } catch {
+      toast.error("Failed to save location pin")
+    } finally {
+      setIsSavingPin(false)
     }
   }
 
@@ -209,17 +272,61 @@ export default function SRDetailScreen() {
                   <MapPin size={12} />
                   Zone: {sr.location.zoneId} • {sr.location.city}
                 </div>
-                <AdminButton 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => {
-                    const query = encodeURIComponent(`${sr.location.address}, ${sr.location.city}, India`);
-                    window.open(`https://www.openstreetmap.org/search?query=${query}`, '_blank');
-                  }}
-                >
-                  View on Map
-                </AdminButton>
+
+                {pinLocation && (
+                  <div className="rounded-xl overflow-hidden border border-border" style={{ height: 220 }}>
+                    <MapContainer
+                      center={pinLocation}
+                      zoom={15}
+                      style={{ height: "100%", width: "100%" }}
+                      scrollWheelZoom={false}
+                    >
+                      <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <DraggablePin
+                        position={pinLocation}
+                        onChange={(lat, lng) => setPinLocation([lat, lng])}
+                      />
+                    </MapContainer>
+                  </div>
+                )}
+
+                {pinLocation && (
+                  <p className="text-[11px] text-brand-muted">
+                    Pin: {pinLocation[0].toFixed(6)}, {pinLocation[1].toFixed(6)}
+                    {!sr.location.coordinates && (
+                      <span className="ml-2 text-status-warning font-bold">— drag to set exact location</span>
+                    )}
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <AdminButton
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      const coords = sr.location.coordinates;
+                      const url = coords
+                        ? `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`
+                        : `https://www.openstreetmap.org/search?query=${encodeURIComponent(`${sr.location.address}, ${sr.location.city}, India`)}`;
+                      window.open(url, '_blank');
+                    }}
+                  >
+                    View on Map
+                  </AdminButton>
+                  <AdminButton
+                    variant="primary"
+                    size="sm"
+                    className="flex-1"
+                    disabled={!pinLocation || isSavingPin}
+                    onClick={handleSavePin}
+                  >
+                    {isSavingPin ? "Saving…" : "Save Pin"}
+                  </AdminButton>
+                </div>
               </div>
             </AdminCard>
           </div>
