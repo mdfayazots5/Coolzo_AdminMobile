@@ -96,6 +96,7 @@ import FeedbackList from "../../src/features/support/FeedbackList";
 import FeedbackDetail from "../../src/features/support/FeedbackDetail";
 import NotificationTemplates from "../../src/features/governance/NotificationTemplates";
 import CMSManager from "../../src/features/governance/CMSManager";
+import CmsDeliveryManager from "../../src/features/governance/CmsDeliveryManager";
 import ReportsHub from "../../src/features/governance/ReportsHub";
 import AuditLogs from "../../src/features/governance/AuditLogs";
 import CouponManager from "../../src/features/governance/CouponManager";
@@ -279,6 +280,7 @@ const routes = [
   { path: "/settings/branches/:id/edit", element: <AuthGuard><RoleGuard module="settings"><CreateBranchScreen /></RoleGuard></AuthGuard> },
   { path: "/settings/branches/create", element: <AuthGuard><RoleGuard module="settings"><CreateBranchScreen /></RoleGuard></AuthGuard> },
   { path: "/governance/cms", element: <AuthGuard><RoleGuard module="settings"><CMSManager /></RoleGuard></AuthGuard> },
+  { path: "/governance/cms-delivery", element: <AuthGuard><RoleGuard module="settings"><CmsDeliveryManager /></RoleGuard></AuthGuard> },
   { path: "/marketing", element: <Navigate to="/marketing/dashboard" replace /> },
   { path: "/marketing/dashboard", element: <AuthGuard><RoleGuard module="settings"><CMSManager /></RoleGuard></AuthGuard> },
   { path: "/governance/reports", element: <AuthGuard><RoleGuard module="reports"><ReportsHub /></RoleGuard></AuthGuard> },

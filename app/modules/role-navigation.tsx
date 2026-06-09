@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   ClipboardList,
   CreditCard,
+  Globe,
   LayoutDashboard,
   MapPin,
   MessageSquare,
@@ -29,6 +30,7 @@ export const ROLE_NAVIGATION: Record<UserRole, AppNavItem[]> = {
     { id: "billing", label: "Billing", path: "/billing/dashboard", module: "billing", icon: <CreditCard size={20} /> },
     { id: "support", label: "Support", path: "/support/dashboard", module: "support", icon: <MessageSquare size={20} /> },
     { id: "notifications", label: "Notifications", path: "/notifications", module: "settings", icon: <Bell size={20} /> },
+    { id: "web-portal", label: "Web Portal", path: "/governance/cms-delivery", module: "settings", icon: <Globe size={20} /> },
     { id: "settings", label: "Settings", path: "/settings", module: "settings", icon: <Settings size={20} /> },
   ],
   [UserRole.ADMIN]: [
@@ -40,6 +42,7 @@ export const ROLE_NAVIGATION: Record<UserRole, AppNavItem[]> = {
     { id: "operations", label: "Operations", path: "/operations/dashboard", module: "operations", icon: <Activity size={20} /> },
     { id: "billing", label: "Billing", path: "/billing/dashboard", module: "billing", icon: <CreditCard size={20} /> },
     { id: "notifications", label: "Notifications", path: "/notifications", module: "settings", icon: <Bell size={20} /> },
+    { id: "web-portal", label: "Web Portal", path: "/governance/cms-delivery", module: "settings", icon: <Globe size={20} /> },
     { id: "settings", label: "Settings", path: "/settings", module: "settings", icon: <Settings size={20} /> },
   ],
   [UserRole.OPS_MANAGER]: [
@@ -100,6 +103,7 @@ export const ROLE_NAVIGATION: Record<UserRole, AppNavItem[]> = {
   ],
   [UserRole.MARKETING_MANAGER]: [
     { id: "dashboard", label: "Dashboard", path: "/marketing/dashboard", module: "settings", icon: <LayoutDashboard size={20} /> },
+    { id: "web-portal", label: "Web Portal", path: "/governance/cms-delivery", module: "settings", icon: <Globe size={20} /> },
     { id: "notifications", label: "Notifications", path: "/notifications", module: "settings", icon: <Bell size={20} /> },
     { id: "settings", label: "Settings", path: "/settings", module: "settings", icon: <Settings size={20} /> },
     { id: "profile", label: "Profile", path: "/profile", module: "dashboard", icon: <UserCircle size={20} /> },
