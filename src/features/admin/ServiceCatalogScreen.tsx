@@ -11,6 +11,7 @@ import { AdminButton } from "@/components/shared/AdminButton"
 import { AdminTextField } from "@/components/shared/AdminTextField"
 import { useMasterData } from "@/core/master-data/MasterDataProvider"
 import type { MasterDataRecord, MasterDataRecordInput, MasterDataSlug } from "@/core/network/master-data-repository"
+import { serviceCatalogRepository, type AdminServiceItem } from "@/core/network/service-catalog-repository"
 import {
   asOptionalNumber,
   getMetadataNumber,
@@ -22,9 +23,11 @@ import {
 import { Layers3, PackageSearch, Plus, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+// NOTE: "service-types" was retired here (Phase 3). Bookable services live in tblService — manage their
+// images in Settings → Service Images. This screen now covers subtypes + equipment taxonomies only.
 type CatalogSection = Extract<
   MasterDataSlug,
-  "service-types" | "service-subtypes" | "equipment-brands" | "equipment-models"
+  "service-subtypes" | "equipment-brands" | "equipment-models"
 >
 
 interface CatalogFormState {
@@ -35,10 +38,6 @@ interface CatalogFormState {
   isActive: boolean
   isPublished: boolean
   sortOrder: string
-  category: string
-  basePrice: string
-  durationMinutes: string
-  equipmentTypes: string
   parentCode: string
   durationModifier: string
   priceModifier: string
@@ -53,10 +52,6 @@ interface CatalogFormState {
 }
 
 const SECTION_META: Record<CatalogSection, { title: string; description: string }> = {
-  "service-types": {
-    title: "Service Types",
-    description: "Primary AC services, durations, base pricing, and equipment applicability.",
-  },
   "service-subtypes": {
     title: "Service Subtypes",
     description: "Sub-service definitions, duration modifiers, and skill requirements.",
@@ -78,10 +73,6 @@ const createEmptyForm = (sortOrder = 1): CatalogFormState => ({
   isActive: true,
   isPublished: true,
   sortOrder: String(sortOrder),
-  category: "",
-  basePrice: "",
-  durationMinutes: "",
-  equipmentTypes: "",
   parentCode: "",
   durationModifier: "",
   priceModifier: "",
@@ -112,12 +103,6 @@ const hydrateForm = (section: CatalogSection, sortOrder: number, record?: Master
     isActive: record.isActive,
     isPublished: record.isPublished,
     sortOrder: String(record.sortOrder),
-    category: getMetadataString(metadata, "category"),
-    basePrice: String(getMetadataNumber(metadata, "basePrice", 0) || ""),
-    durationMinutes: String(
-      getMetadataNumber(metadata, "duration", getMetadataNumber(metadata, "defaultDurationMinutes", 0)) || ""
-    ),
-    equipmentTypes: getMetadataStringList(metadata, "applicableEquipmentTypes").join(", "),
     parentCode: getMetadataString(metadata, "parentCode"),
     durationModifier: String(getMetadataNumber(metadata, "durationModifier", 0) || ""),
     priceModifier: String(getMetadataNumber(metadata, "priceModifier", 0) || ""),
@@ -144,19 +129,6 @@ const buildPayload = (section: CatalogSection, form: CatalogFormState): MasterDa
   }
 
   switch (section) {
-    case "service-types":
-      return {
-        ...shared,
-        metadata: {
-          category: form.category.trim(),
-          basePrice: asOptionalNumber(form.basePrice),
-          duration: asOptionalNumber(form.durationMinutes),
-          applicableEquipmentTypes: form.equipmentTypes
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-        },
-      }
     case "service-subtypes":
       return {
         ...shared,
@@ -197,7 +169,8 @@ const buildPayload = (section: CatalogSection, form: CatalogFormState): MasterDa
 
 export default function ServiceCatalogScreen() {
   const { masterData, loadMasterData, saveMasterData, removeMasterData } = useMasterData()
-  const [activeSection, setActiveSection] = React.useState<CatalogSection>("service-types")
+  const [activeSection, setActiveSection] = React.useState<CatalogSection>("service-subtypes")
+  const [services, setServices] = React.useState<AdminServiceItem[]>([])
   const [form, setForm] = React.useState<CatalogFormState>(createEmptyForm())
   const [isLoading, setIsLoading] = React.useState(true)
   const [isSaving, setIsSaving] = React.useState(false)
@@ -205,14 +178,20 @@ export default function ServiceCatalogScreen() {
   React.useEffect(() => {
     const loadCatalog = async () => {
       try {
-        const [serviceTypes] = await Promise.all([
-          loadMasterData("service-types"),
+        const [subtypes] = await Promise.all([
           loadMasterData("service-subtypes"),
           loadMasterData("equipment-brands"),
           loadMasterData("equipment-models"),
         ])
 
-        setForm(createEmptyForm(serviceTypes.length + 1))
+        // Real bookable services (tblService) drive the subtype "parent" picker.
+        try {
+          setServices(await serviceCatalogRepository.getServices())
+        } catch (serviceError) {
+          console.error(serviceError)
+        }
+
+        setForm(createEmptyForm(subtypes.length + 1))
       } catch (error) {
         console.error(error)
         toast.error("Unable to load service catalog")
@@ -225,7 +204,6 @@ export default function ServiceCatalogScreen() {
   }, [loadMasterData])
 
   const records: MasterDataRecord[] = sortBySortOrder(masterData[activeSection] || [])
-  const serviceTypes: MasterDataRecord[] = sortBySortOrder(masterData["service-types"] || [])
   const equipmentBrands: MasterDataRecord[] = sortBySortOrder(masterData["equipment-brands"] || [])
 
   const resetForm = React.useCallback(
@@ -291,7 +269,8 @@ export default function ServiceCatalogScreen() {
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">Service & Equipment Catalog</h1>
           <p className="text-sm text-brand-muted">
-            Maintain service types, subtypes, equipment brands, and model definitions from one control surface.
+            Maintain service subtypes, equipment brands, and model definitions. Bookable service photos are
+            managed in Settings → Service Images.
           </p>
         </div>
         <AdminButton
@@ -303,7 +282,7 @@ export default function ServiceCatalogScreen() {
         </AdminButton>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {(Object.keys(SECTION_META) as CatalogSection[]).map((section) => (
           <button
             key={section}
@@ -361,47 +340,20 @@ export default function ServiceCatalogScreen() {
               onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))}
             />
 
-            {activeSection === "service-types" && (
-              <>
-                <AdminTextField
-                  label="Category"
-                  value={form.category}
-                  onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-                />
-                <AdminTextField
-                  label="Base Price"
-                  type="number"
-                  value={form.basePrice}
-                  onChange={(event) => setForm((current) => ({ ...current, basePrice: event.target.value }))}
-                />
-                <AdminTextField
-                  label="Default Duration (Minutes)"
-                  type="number"
-                  value={form.durationMinutes}
-                  onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))}
-                />
-                <AdminTextField
-                  label="Applicable Equipment Types"
-                  value={form.equipmentTypes}
-                  onChange={(event) => setForm((current) => ({ ...current, equipmentTypes: event.target.value }))}
-                  helperText="Comma separated values"
-                />
-              </>
-            )}
-
             {activeSection === "service-subtypes" && (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-brand-muted">Parent Service Type</label>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-brand-muted">Parent Service</label>
                   <select
+                    title="Parent Service"
                     value={form.parentCode}
                     onChange={(event) => setForm((current) => ({ ...current, parentCode: event.target.value }))}
                     className="flex h-10 w-full rounded-[8px] border border-input bg-brand-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-navy focus-visible:border-brand-navy"
                   >
-                    <option value="">Select service type</option>
-                    {serviceTypes.map((serviceType) => (
-                      <option key={serviceType.id} value={serviceType.code}>
-                        {serviceType.label}
+                    <option value="">Select service</option>
+                    {services.map((service) => (
+                      <option key={service.serviceId} value={service.serviceName}>
+                        {service.serviceName}
                       </option>
                     ))}
                   </select>
@@ -440,6 +392,7 @@ export default function ServiceCatalogScreen() {
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-brand-muted">Equipment Brand</label>
                   <select
+                    title="Equipment Brand"
                     value={form.brandCode}
                     onChange={(event) => setForm((current) => ({ ...current, brandCode: event.target.value }))}
                     className="flex h-10 w-full rounded-[8px] border border-input bg-brand-surface px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-navy focus-visible:border-brand-navy"
@@ -538,13 +491,6 @@ export default function ServiceCatalogScreen() {
                         <p className="text-sm text-brand-muted">{record.description}</p>
                       )}
                       <div className="flex flex-wrap gap-2 text-xs text-brand-navy">
-                        {activeSection === "service-types" && (
-                          <>
-                            <span>Category: {getMetadataString(record.metadata, "category", "General")}</span>
-                            <span>Duration: {getMetadataNumber(record.metadata, "duration", 0)} mins</span>
-                            <span>Base Price: ₹{getMetadataNumber(record.metadata, "basePrice", 0)}</span>
-                          </>
-                        )}
                         {activeSection === "service-subtypes" && (
                           <>
                             <span>Parent: {getMetadataString(record.metadata, "parentCode", "Not linked")}</span>

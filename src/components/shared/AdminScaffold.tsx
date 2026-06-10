@@ -33,7 +33,7 @@ import { getNavigationForRole } from "../../../app/navigation/menu"
 export function AdminScaffold({ children }: { children: React.ReactNode }) {
   const { user, refreshToken, logout } = useAuthStore()
   const { canView, effectiveRole, isViewingAsRole, viewAsRole, startViewAsRole, exitViewAsRole } = useRBAC()
-  const { isOnline, pendingSyncCount } = useSystemUX()
+  const { isOnline } = useSystemUX()
   const location = useLocation()
   const navigate = useNavigate()
   const [isProfileOpen, setIsProfileOpen] = React.useState(false)
@@ -154,7 +154,7 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Branch</span>
             <span className="text-xs font-bold text-brand-navy">
-              Hyderabad Central {pendingSyncCount > 0 ? `• ${pendingSyncCount} pending sync` : ""}
+              Hyderabad Central
             </span>
           </div>
         </div>
@@ -166,16 +166,12 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
           >
             <Search size={20} />
           </button>
-          <button 
-            onClick={() => navigate(pendingSyncCount > 0 ? '/system/sync' : '/settings/master/notifications')}
+          <button
+            onClick={() => navigate('/settings/master/notifications')}
             className="p-2 hover:bg-brand-navy/5 rounded-full text-brand-navy transition-colors relative"
+            aria-label="Notifications"
           >
             <Bell size={20} />
-            {pendingSyncCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 bg-status-emergency rounded-full border-2 border-brand-surface text-[8px] leading-[12px] text-white font-bold flex items-center justify-center">
-                {pendingSyncCount}
-              </span>
-            )}
           </button>
           <button 
             onClick={() => setIsProfileOpen(true)}

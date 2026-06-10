@@ -102,9 +102,9 @@ import AuditLogs from "../../src/features/governance/AuditLogs";
 import CouponManager from "../../src/features/governance/CouponManager";
 import SystemHealthDashboard from "../../src/features/system/SystemHealthDashboard";
 import PermissionsSettings from "../../src/features/system/PermissionsSettings";
-import OfflineSyncQueue from "../../src/features/system/OfflineSyncQueue";
 import SystemConfigHomeScreen from "../../src/features/admin/SystemConfigHomeScreen";
 import ServiceCatalogScreen from "../../src/features/admin/ServiceCatalogScreen";
+import ServiceImagesScreen from "../../src/features/admin/ServiceImagesScreen";
 import ZoneManagementScreen from "../../src/features/admin/ZoneManagementScreen";
 import BusinessHoursScreen from "../../src/features/admin/BusinessHoursScreen";
 import PricingConfigScreen from "../../src/features/admin/PricingConfigScreen";
@@ -259,6 +259,7 @@ const routes = [
   { path: "/notifications", element: <AuthGuard><RoleGuard module="settings"><NotificationsScreen /></RoleGuard></AuthGuard> },
   { path: "/settings", element: <AuthGuard><RoleGuard module="settings"><SettingsHomeScreen /></RoleGuard></AuthGuard> },
   { path: "/settings/master/services", element: <AuthGuard><RoleGuard module="settings"><ServiceCatalogScreen /></RoleGuard></AuthGuard> },
+  { path: "/settings/master/service-images", element: <AuthGuard><RoleGuard module="settings"><ServiceImagesScreen /></RoleGuard></AuthGuard> },
   { path: "/settings/master/brands", element: <AuthGuard><RoleGuard module="settings"><ServiceCatalogScreen /></RoleGuard></AuthGuard> },
   { path: "/settings/master/zones", element: <AuthGuard><RoleGuard module="settings"><ZoneManagementScreen /></RoleGuard></AuthGuard> },
   { path: "/settings/master/hours", element: <AuthGuard><RoleGuard module="settings"><BusinessHoursScreen /></RoleGuard></AuthGuard> },
@@ -289,7 +290,6 @@ const routes = [
   { path: "/governance/coupons", element: <AuthGuard><RoleGuard module="settings"><CouponManager /></RoleGuard></AuthGuard> },
   { path: "/system/health", element: <AuthGuard><RoleGuard module="settings"><SystemHealthDashboard /></RoleGuard></AuthGuard> },
   { path: "/system/permissions", element: <AuthGuard><RoleGuard module="settings"><PermissionsSettings /></RoleGuard></AuthGuard> },
-  { path: "/system/sync", element: <AuthGuard><RoleGuard module="settings"><OfflineSyncQueue /></RoleGuard></AuthGuard> },
   { path: "/profile", element: <AuthGuard><MyProfileScreen /></AuthGuard> },
   { path: "/support-tickets", element: <Navigate to="/support/tickets" replace /> },
   { path: "/jobs/:srId", element: <ParamRedirect resolve={(params) => `/field/job/${params.srId ?? ""}`} /> },

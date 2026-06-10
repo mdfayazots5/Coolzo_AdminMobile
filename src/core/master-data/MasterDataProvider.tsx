@@ -14,6 +14,7 @@ import {
   MasterDataRecord,
   MasterDataRecordInput,
   MasterDataSlug,
+  MasterImageUpload,
   masterDataRepository,
 } from "@/core/network/master-data-repository"
 
@@ -25,6 +26,7 @@ interface MasterDataContextValue {
   loadMasterData: (slug: MasterDataSlug, forceRefresh?: boolean) => Promise<MasterDataRecord[]>
   saveMasterData: (slug: MasterDataSlug, input: MasterDataRecordInput) => Promise<MasterDataRecord>
   removeMasterData: (slug: MasterDataSlug, id: string) => Promise<void>
+  uploadMasterImage: (folder: string, payload: MasterImageUpload) => Promise<string>
   loadConfiguration: (slug: ConfigurationGroupSlug, forceRefresh?: boolean) => Promise<ConfigurationRecord[]>
   saveConfiguration: (slug: ConfigurationGroupSlug, input: ConfigurationRecordInput) => Promise<ConfigurationRecord>
   loadBusinessHours: (forceRefresh?: boolean) => Promise<BusinessHourRecord[]>
@@ -61,6 +63,11 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     const records = await masterDataRepository.getMasterRecords(slug, { forceRefresh: true })
     setMasterData((current) => ({ ...current, [slug]: records }))
   }, [])
+
+  const uploadMasterImage = React.useCallback(
+    (folder: string, payload: MasterImageUpload) => masterDataRepository.uploadMasterImage(folder, payload),
+    []
+  )
 
   const loadConfiguration = React.useCallback(async (slug: ConfigurationGroupSlug, forceRefresh = false) => {
     const records = await masterDataRepository.getConfigurationRecords(slug, { forceRefresh })
@@ -110,6 +117,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     loadMasterData,
     saveMasterData,
     removeMasterData,
+    uploadMasterImage,
     loadConfiguration,
     saveConfiguration,
     loadBusinessHours,
@@ -125,6 +133,7 @@ export function MasterDataProvider({ children }: { children: React.ReactNode }) 
     loadHolidays,
     loadMasterData,
     removeMasterData,
+    uploadMasterImage,
     saveBusinessHours,
     saveConfiguration,
     saveHoliday,

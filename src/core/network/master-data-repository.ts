@@ -52,6 +52,12 @@ export interface MasterDataRecordInput {
   metadata?: Record<string, unknown>
 }
 
+export interface MasterImageUpload {
+  fileName: string
+  contentType: string
+  base64Content: string
+}
+
 export interface ConfigurationRecord {
   id: string
   slug: ConfigurationGroupSlug
@@ -113,6 +119,7 @@ export interface MasterDataRepository {
   createMasterRecord(slug: MasterDataSlug, input: MasterDataRecordInput): Promise<MasterDataRecord>
   updateMasterRecord(slug: MasterDataSlug, input: MasterDataRecordInput): Promise<MasterDataRecord>
   deleteMasterRecord(slug: MasterDataSlug, id: string): Promise<void>
+  uploadMasterImage(folder: string, payload: MasterImageUpload): Promise<string>
   getConfigurationRecords(slug: ConfigurationGroupSlug, options?: ConfigurationQueryOptions): Promise<ConfigurationRecord[]>
   createConfigurationRecord(slug: ConfigurationGroupSlug, input: ConfigurationRecordInput): Promise<ConfigurationRecord>
   updateConfigurationRecord(slug: ConfigurationGroupSlug, input: ConfigurationRecordInput): Promise<ConfigurationRecord>
@@ -368,6 +375,11 @@ class MockMasterDataRepository implements MasterDataRepository {
     this.masterRecords[slug] = this.masterRecords[slug].filter((record) => record.id !== id)
   }
 
+  async uploadMasterImage(_folder: string, payload: MasterImageUpload): Promise<string> {
+    // Demo mode: echo back a data URL so previews work without a backend.
+    return `data:${payload.contentType};base64,${payload.base64Content}`
+  }
+
   async getConfigurationRecords(slug: ConfigurationGroupSlug): Promise<ConfigurationRecord[]> {
     return [...this.configurationRecords[slug]]
   }
@@ -484,6 +496,16 @@ class LiveMasterDataRepository implements MasterDataRepository {
       params: { dynamicMasterRecordId: Number(id) },
     })
     this.invalidateMasterData(slug)
+  }
+
+  async uploadMasterImage(folder: string, payload: MasterImageUpload): Promise<string> {
+    const response = await apiClient.post<{ url: string }>("/api/admin-masters/upload-image", {
+      folder,
+      fileName: payload.fileName,
+      contentType: payload.contentType,
+      base64Content: payload.base64Content,
+    })
+    return response.data.url
   }
 
   async getConfigurationRecords(slug: ConfigurationGroupSlug, options?: ConfigurationQueryOptions): Promise<ConfigurationRecord[]> {

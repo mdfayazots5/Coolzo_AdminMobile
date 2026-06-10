@@ -4,7 +4,7 @@
  */
 
 import * as React from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
   Camera,
@@ -595,9 +595,6 @@ export default function JobWorkflowContainer() {
               </p>
             </div>
           </div>
-          <Link className="text-sm font-medium text-brand-gold underline-offset-4 hover:underline" to="/system/sync">
-            View offline queue
-          </Link>
         </div>
       </div>
 

@@ -36,7 +36,7 @@ export default function RootErrorBoundary() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-white flex items-center justify-center p-6 font-sans">
+    <div className="min-h-screen bg-brand-white flex flex-col items-center justify-center p-6 font-sans">
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

@@ -7,7 +7,7 @@ import * as React from "react"
 import { motion } from "motion/react"
 import { AdminCard } from "@/components/shared/Cards"
 import { SectionHeader } from "@/components/shared/Layout"
-import { Clock, CreditCard, FileText, History, MapPin, Settings, ShieldCheck, Users, Wrench } from "lucide-react"
+import { Clock, CreditCard, FileText, History, Image as ImageIcon, MapPin, Settings, ShieldCheck, Users, Wrench } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { LocalStorage, StorageKey } from "@/core/storage/local-storage"
 
@@ -74,6 +74,13 @@ export default function SystemConfigHomeScreen() {
           icon: <Wrench size={20} />,
           path: "/settings/master/services",
           description: "Service types, subtypes, brands, and model mappings",
+        },
+        {
+          id: "service-images",
+          label: "Service Images",
+          icon: <ImageIcon size={20} />,
+          path: "/settings/master/service-images",
+          description: "Upload per-service photos shown on the public website",
         },
         {
           id: "zones",
