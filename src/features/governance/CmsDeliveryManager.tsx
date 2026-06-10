@@ -5,12 +5,15 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Copy, Image as ImageIcon, Palette, RefreshCw, Rocket, Upload } from "lucide-react";
+import { Copy, FileText, Image as ImageIcon, Palette, Plus, RefreshCw, Rocket, Save, Upload } from "lucide-react";
 import { AdminCard } from "@/components/shared/Cards";
 import { AdminButton } from "@/components/shared/AdminButton";
 import { InlineLoader } from "@/components/shared/Layout";
 import {
   cmsDeliveryRepository,
+  CmsBlock,
+  CmsBlockUpsert,
+  CONTACT_BLOCK_KEYS,
   ScreenImageSlot,
   SnapshotManifest,
   ThemeTokens,
@@ -18,7 +21,18 @@ import {
   THEME_TOKEN_KEYS,
 } from "@/core/network/cms-delivery-repository";
 
-type TabKey = "theme" | "images" | "publish";
+type TabKey = "theme" | "content" | "images" | "publish";
+
+const EMPTY_BLOCK: CmsBlockUpsert = {
+  blockKey: "",
+  title: "",
+  summary: "",
+  content: "",
+  previewImageUrl: "",
+  isActive: true,
+  isPublished: true,
+  sortOrder: 0,
+};
 
 const TOKEN_LABELS: Record<string, string> = {
   "theme.color.primary": "Primary (Deep Navy)",
@@ -53,19 +67,25 @@ export default function CmsDeliveryManager() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [tokens, setTokens] = React.useState<ThemeTokens>({});
   const [slots, setSlots] = React.useState<ScreenImageSlot[]>([]);
+  const [blocks, setBlocks] = React.useState<CmsBlock[]>([]);
   const [manifest, setManifest] = React.useState<SnapshotManifest | null>(null);
   const [isSavingTheme, setIsSavingTheme] = React.useState(false);
+  const [savingBlockId, setSavingBlockId] = React.useState<number | null>(null);
+  const [newBlock, setNewBlock] = React.useState<CmsBlockUpsert>(EMPTY_BLOCK);
+  const [isCreatingBlock, setIsCreatingBlock] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [rollbackVersion, setRollbackVersion] = React.useState("");
 
   const reload = React.useCallback(async () => {
-    const [theme, slotList, currentManifest] = await Promise.all([
+    const [theme, slotList, blockList, currentManifest] = await Promise.all([
       cmsDeliveryRepository.getTheme(),
       cmsDeliveryRepository.getImageSlots(),
+      cmsDeliveryRepository.getBlocks(),
       cmsDeliveryRepository.getManifest(),
     ]);
     setTokens(theme.tokens);
     setSlots(slotList);
+    setBlocks(blockList);
     setManifest(currentManifest);
   }, []);
 
@@ -90,6 +110,53 @@ export default function CmsDeliveryManager() {
       toast.error("Failed to save theme.");
     } finally {
       setIsSavingTheme(false);
+    }
+  };
+
+  const setBlockField = <K extends keyof CmsBlock>(id: number, field: K, value: CmsBlock[K]) =>
+    setBlocks((current) => current.map((b) => (b.cmsBlockId === id ? { ...b, [field]: value } : b)));
+
+  const handleSaveBlock = async (block: CmsBlock) => {
+    if (!block.blockKey.trim()) {
+      toast.error("Block key is required.");
+      return;
+    }
+    setSavingBlockId(block.cmsBlockId);
+    try {
+      const updated = await cmsDeliveryRepository.updateBlock(block.cmsBlockId, {
+        blockKey: block.blockKey,
+        title: block.title,
+        summary: block.summary,
+        content: block.content,
+        previewImageUrl: block.previewImageUrl,
+        isActive: block.isActive,
+        isPublished: block.isPublished,
+        sortOrder: block.sortOrder,
+      });
+      setBlocks((current) => current.map((b) => (b.cmsBlockId === updated.cmsBlockId ? updated : b)));
+      toast.success(`Saved "${block.blockKey}". Publish to push it live.`);
+    } catch {
+      toast.error("Failed to save block.");
+    } finally {
+      setSavingBlockId(null);
+    }
+  };
+
+  const handleCreateBlock = async () => {
+    if (!newBlock.blockKey.trim()) {
+      toast.error("Block key is required (e.g. contact.phone).");
+      return;
+    }
+    setIsCreatingBlock(true);
+    try {
+      const created = await cmsDeliveryRepository.createBlock(newBlock);
+      setBlocks((current) => [created, ...current]);
+      setNewBlock(EMPTY_BLOCK);
+      toast.success(`Created "${created.blockKey}". Publish to push it live.`);
+    } catch {
+      toast.error("Failed to create block (key may already exist).");
+    } finally {
+      setIsCreatingBlock(false);
     }
   };
 
@@ -151,9 +218,13 @@ export default function CmsDeliveryManager() {
 
   const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
     { key: "theme", label: "Theme", icon: <Palette size={16} /> },
+    { key: "content", label: "Content Blocks", icon: <FileText size={16} /> },
     { key: "images", label: "Screen Images", icon: <ImageIcon size={16} /> },
     { key: "publish", label: "Publish & Versions", icon: <Rocket size={16} /> },
   ];
+
+  const existingKeys = new Set(blocks.map((b) => b.blockKey));
+  const missingContactKeys = CONTACT_BLOCK_KEYS.filter((k) => !existingKeys.has(k));
 
   const slotsByPage = slots.reduce<Record<string, ScreenImageSlot[]>>((acc, slot) => {
     (acc[slot.pageKey] ??= []).push(slot);
@@ -249,6 +320,137 @@ export default function CmsDeliveryManager() {
             </AdminButton>
           </div>
         </AdminCard>
+      )}
+
+      {tab === "content" && (
+        <div className="space-y-6">
+          <AdminCard className="space-y-4 p-6">
+            <div>
+              <h2 className="text-lg font-semibold text-brand-navy">Add a content block</h2>
+              <p className="text-sm text-brand-muted">
+                Keyed text the public website reads by key. Footer contact details use the keys
+                <code className="mx-1 rounded bg-slate-100 px-1">contact.phone</code>,
+                <code className="mx-1 rounded bg-slate-100 px-1">contact.whatsapp</code>,
+                <code className="mx-1 rounded bg-slate-100 px-1">contact.email</code>,
+                <code className="mx-1 rounded bg-slate-100 px-1">contact.city</code>. Changes go live on Publish.
+              </p>
+            </div>
+
+            {missingContactKeys.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-[8px] bg-amber-50 p-3 text-sm text-amber-800">
+                <span>Quick-add missing contact blocks:</span>
+                {missingContactKeys.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setNewBlock({ ...EMPTY_BLOCK, blockKey: key, title: key })}
+                    className="inline-flex items-center gap-1 rounded-[6px] bg-white px-2 py-1 text-xs font-medium text-brand-navy hover:bg-slate-50"
+                  >
+                    <Plus size={12} /> {key}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <input
+                aria-label="Block key"
+                type="text"
+                value={newBlock.blockKey}
+                onChange={(e) => setNewBlock({ ...newBlock, blockKey: e.target.value })}
+                placeholder="Block key (e.g. contact.phone)"
+                className="rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+              />
+              <input
+                aria-label="Title"
+                type="text"
+                value={newBlock.title}
+                onChange={(e) => setNewBlock({ ...newBlock, title: e.target.value })}
+                placeholder="Title (optional label)"
+                className="rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <textarea
+              aria-label="Content"
+              value={newBlock.content}
+              onChange={(e) => setNewBlock({ ...newBlock, content: e.target.value })}
+              placeholder="Content / value (e.g. 7075949956)"
+              rows={2}
+              className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+            />
+            <div className="flex items-center justify-between">
+              <label className="inline-flex items-center gap-2 text-sm text-brand-muted">
+                <input
+                  type="checkbox"
+                  checked={newBlock.isPublished}
+                  onChange={(e) => setNewBlock({ ...newBlock, isPublished: e.target.checked })}
+                />
+                Published
+              </label>
+              <AdminButton onClick={handleCreateBlock} isLoading={isCreatingBlock} icon={<Plus size={16} />}>
+                Add block
+              </AdminButton>
+            </div>
+          </AdminCard>
+
+          {blocks.length === 0 ? (
+            <AdminCard className="p-6 text-sm text-brand-muted">No content blocks yet. Add one above.</AdminCard>
+          ) : (
+            blocks.map((block) => {
+              const isContact = (CONTACT_BLOCK_KEYS as readonly string[]).includes(block.blockKey);
+              return (
+                <AdminCard key={block.cmsBlockId} className="space-y-3 p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <code className="rounded bg-slate-100 px-2 py-0.5 text-sm font-semibold text-brand-navy">{block.blockKey}</code>
+                      {isContact && (
+                        <span className="rounded-[6px] bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">contact</span>
+                      )}
+                      {!block.isPublished && (
+                        <span className="rounded-[6px] bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">draft</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-brand-muted">v{block.versionNumber}</span>
+                  </div>
+                  <input
+                    aria-label={`Title for ${block.blockKey}`}
+                    type="text"
+                    value={block.title}
+                    onChange={(e) => setBlockField(block.cmsBlockId, "title", e.target.value)}
+                    placeholder="Title"
+                    className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+                  />
+                  <textarea
+                    aria-label={`Content for ${block.blockKey}`}
+                    value={block.content}
+                    onChange={(e) => setBlockField(block.cmsBlockId, "content", e.target.value)}
+                    rows={3}
+                    placeholder="Content / value"
+                    className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+                  />
+                  <div className="flex items-center justify-between">
+                    <label className="inline-flex items-center gap-2 text-sm text-brand-muted">
+                      <input
+                        type="checkbox"
+                        checked={block.isPublished}
+                        onChange={(e) => setBlockField(block.cmsBlockId, "isPublished", e.target.checked)}
+                      />
+                      Published
+                    </label>
+                    <AdminButton
+                      variant="outline"
+                      onClick={() => handleSaveBlock(block)}
+                      isLoading={savingBlockId === block.cmsBlockId}
+                      icon={<Save size={16} />}
+                    >
+                      Save
+                    </AdminButton>
+                  </div>
+                </AdminCard>
+              );
+            })
+          )}
+        </div>
       )}
 
       {tab === "images" && (

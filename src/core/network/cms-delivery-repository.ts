@@ -70,6 +70,41 @@ export interface SnapshotManifest {
   publishedAtUtc: string;
 }
 
+/** A CMS content block — keyed text the public site reads via getBlock(key). */
+export interface CmsBlock {
+  cmsBlockId: number;
+  blockKey: string;
+  title: string;
+  summary: string;
+  content: string;
+  previewImageUrl: string;
+  isActive: boolean;
+  isPublished: boolean;
+  sortOrder: number;
+  versionNumber: number;
+  dateCreated: string;
+  lastUpdated?: string | null;
+}
+
+export interface CmsBlockUpsert {
+  blockKey: string;
+  title: string;
+  summary: string;
+  content: string;
+  previewImageUrl: string;
+  isActive: boolean;
+  isPublished: boolean;
+  sortOrder: number;
+}
+
+/** Well-known content-block keys the public site reads (footer contact details). */
+export const CONTACT_BLOCK_KEYS = [
+  "contact.phone",
+  "contact.whatsapp",
+  "contact.email",
+  "contact.city",
+] as const;
+
 export const cmsDeliveryRepository = {
   async getTheme(): Promise<ThemeResponse> {
     const response = await apiClient.get<ThemeResponse>("/api/cms/admin/theme");
@@ -120,6 +155,23 @@ export const cmsDeliveryRepository = {
 
   async rollback(version: number): Promise<SnapshotManifest> {
     const response = await apiClient.post<SnapshotManifest>(`/api/cms/rollback/${version}`);
+    return response.data;
+  },
+
+  async getBlocks(search?: string): Promise<CmsBlock[]> {
+    const response = await apiClient.get<CmsBlock[]>("/api/cms/admin/blocks", {
+      params: search ? { search } : undefined,
+    });
+    return response.data;
+  },
+
+  async createBlock(payload: CmsBlockUpsert): Promise<CmsBlock> {
+    const response = await apiClient.post<CmsBlock>("/api/cms/admin/blocks", payload);
+    return response.data;
+  },
+
+  async updateBlock(id: number, payload: CmsBlockUpsert): Promise<CmsBlock> {
+    const response = await apiClient.put<CmsBlock>(`/api/cms/admin/blocks/${id}`, payload);
     return response.data;
   },
 };
