@@ -23,6 +23,51 @@ import {
 
 type TabKey = "theme" | "content" | "images" | "publish";
 
+function greatestCommonDivisor(a: number, b: number): number {
+  return b === 0 ? a : greatestCommonDivisor(b, a % b);
+}
+
+function describeAspectRatio(width: number, height: number): string {
+  if (!width || !height) return "";
+  const divisor = greatestCommonDivisor(width, height) || 1;
+  return `${width / divisor}:${height / divisor}`;
+}
+
+const LOGO_RECOMMENDATION = {
+  dimensions: "Guideline only — scaled to fit, never cropped",
+  format: "SVG preferred (scales perfectly); raster ~64 px tall",
+  background: "Transparent PNG / WebP / SVG",
+  maxSize: "5 MB",
+};
+
+const BREAKPOINT_CONTEXT: Record<string, string> = {
+  desktop: "wide desktop / large-screen layout",
+  tablet: "tablet / mid-width screen layout",
+  mobile: "mobile portrait / small-screen layout",
+};
+
+/**
+ * Builds an AI image-generation prompt (Gemini / any model) that pairs the seeded
+ * creative direction with the slot's hard technical constraints — exact resolution,
+ * aspect ratio, and target breakpoint — so the generated image fits the slot.
+ */
+function buildImagePrompt(slot: ScreenImageSlot): string {
+  const ratio = describeAspectRatio(slot.recommendedWidth, slot.recommendedHeight);
+  const context = BREAKPOINT_CONTEXT[slot.breakpoint] ?? `${slot.breakpoint} layout`;
+  const creative =
+    slot.suggestedAIPrompt?.trim() ||
+    slot.altText?.trim() ||
+    "Professional brand image for an AC (air-conditioning) service company.";
+
+  return [
+    creative,
+    `Use: this is the "${slot.slotKey}" image on the ${slot.pageKey} page, for a ${context}.`,
+    `Output exactly ${slot.recommendedWidth}×${slot.recommendedHeight} px${ratio ? ` (${ratio} aspect ratio)` : ""}; fill the whole frame edge to edge with no letterboxing, borders, or padding.`,
+    `Keep the main subject centered within the safe area so nothing important is cropped at this aspect ratio.`,
+    `High-resolution, photorealistic, sharp focus, even professional lighting, navy and gold brand palette. No text, logos, watermarks, or UI overlays.`,
+  ].join(" ");
+}
+
 const EMPTY_BLOCK: CmsBlockUpsert = {
   blockKey: "",
   title: "",
@@ -50,6 +95,30 @@ const TOKEN_LABELS: Record<string, string> = {
   "theme.logoUrl": "Logo URL",
 };
 
+/**
+ * Friendly labels + default titles for the well-known content-block keys the public site reads.
+ * Sourced from CONTACT_BLOCK_KEYS so the picker can never drift from what the website looks up.
+ */
+const KNOWN_BLOCK_KEYS: Record<string, { label: string; defaultTitle: string; placeholder: string }> = {
+  // Footer contact details (read by Footer / Contact / MobileActionBar)
+  "contact.phone": { label: "Phone number (footer)", defaultTitle: "Support phone number", placeholder: "e.g. +91 70759 49956" },
+  "contact.whatsapp": { label: "WhatsApp number (footer)", defaultTitle: "WhatsApp number", placeholder: "e.g. +91 70759 49956" },
+  "contact.email": { label: "Email address (footer)", defaultTitle: "Support email", placeholder: "e.g. care@coolzo.com" },
+  "contact.city": { label: "City / location (footer)", defaultTitle: "Service city", placeholder: "e.g. Hyderabad" },
+  // Home page hero (read by Home.tsx)
+  "home.hero.eyebrow": { label: "Home · hero — small label", defaultTitle: "Home hero eyebrow", placeholder: "e.g. AC Repair · Service · Installation · Gas Refill" },
+  "home.hero.title": { label: "Home · hero — headline", defaultTitle: "Home hero headline", placeholder: "e.g. Cool, clean air — booked in 60 seconds." },
+  "home.hero.subtitle": { label: "Home · hero — subtitle", defaultTitle: "Home hero subtitle", placeholder: "e.g. Certified AC technicians across Hyderabad…" },
+  // Home page closing call-to-action (read by Home.tsx)
+  "home.cta.title": { label: "Home · bottom CTA — headline", defaultTitle: "Home CTA headline", placeholder: "e.g. Ready for reliable cooling?" },
+  "home.cta.subtitle": { label: "Home · bottom CTA — subtitle", defaultTitle: "Home CTA subtitle", placeholder: "e.g. Book a certified technician now…" },
+};
+
+const CUSTOM_KEY_OPTION = "__custom__";
+
+/** Valid block key: lowercase alphanumeric words joined by dots or hyphens (e.g. home.hero.tagline). */
+const BLOCK_KEY_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+
 const readFileAsBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -75,6 +144,8 @@ export default function CmsDeliveryManager() {
   const [isCreatingBlock, setIsCreatingBlock] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [rollbackVersion, setRollbackVersion] = React.useState("");
+  const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
+  const [isCustomKey, setIsCustomKey] = React.useState(false);
 
   const reload = React.useCallback(async () => {
     const [theme, slotList, blockList, currentManifest] = await Promise.all([
@@ -121,6 +192,10 @@ export default function CmsDeliveryManager() {
       toast.error("Block key is required.");
       return;
     }
+    if (!block.content.trim()) {
+      toast.error("Text can't be empty — it would show as blank on the website.");
+      return;
+    }
     setSavingBlockId(block.cmsBlockId);
     try {
       const updated = await cmsDeliveryRepository.updateBlock(block.cmsBlockId, {
@@ -143,15 +218,29 @@ export default function CmsDeliveryManager() {
   };
 
   const handleCreateBlock = async () => {
-    if (!newBlock.blockKey.trim()) {
-      toast.error("Block key is required (e.g. contact.phone).");
+    const blockKey = newBlock.blockKey.trim();
+    if (!blockKey) {
+      toast.error("Choose what to edit (or enter a custom key).");
+      return;
+    }
+    if (isCustomKey && !BLOCK_KEY_PATTERN.test(blockKey)) {
+      toast.error("Custom key must be lowercase words separated by dots or hyphens (e.g. home.hero.tagline).");
+      return;
+    }
+    if (existingKeys.has(blockKey)) {
+      toast.error(`"${blockKey}" already exists — edit it in the list below.`);
+      return;
+    }
+    if (!newBlock.content.trim()) {
+      toast.error("Enter the text that will appear on the website.");
       return;
     }
     setIsCreatingBlock(true);
     try {
-      const created = await cmsDeliveryRepository.createBlock(newBlock);
+      const created = await cmsDeliveryRepository.createBlock({ ...newBlock, blockKey });
       setBlocks((current) => [created, ...current]);
       setNewBlock(EMPTY_BLOCK);
+      setIsCustomKey(false);
       toast.success(`Created "${created.blockKey}". Publish to push it live.`);
     } catch {
       toast.error("Failed to create block (key may already exist).");
@@ -175,6 +264,25 @@ export default function CmsDeliveryManager() {
       toast.success(`Image updated for ${slot.pageKey}.${slot.slotKey} (${slot.breakpoint}).`);
     } catch {
       toast.error("Image upload failed.");
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    setIsUploadingLogo(true);
+    try {
+      const base64Content = await readFileAsBase64(file);
+      const { imageUrl } = await cmsDeliveryRepository.uploadAsset({
+        fileName: file.name,
+        contentType: file.type,
+        base64Content,
+        assetKey: "logo",
+      });
+      setToken("theme.logoUrl", imageUrl);
+      toast.success("Logo uploaded. Click Save Theme to apply, then Publish to go live.");
+    } catch {
+      toast.error("Logo upload failed.");
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -209,7 +317,7 @@ export default function CmsDeliveryManager() {
 
   const copyPrompt = async (prompt: string) => {
     await navigator.clipboard.writeText(prompt);
-    toast.success("Gemini prompt copied.");
+    toast.success("AI image prompt copied.");
   };
 
   if (isLoading) {
@@ -218,9 +326,9 @@ export default function CmsDeliveryManager() {
 
   const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
     { key: "theme", label: "Theme", icon: <Palette size={16} /> },
-    { key: "content", label: "Content Blocks", icon: <FileText size={16} /> },
-    { key: "images", label: "Screen Images", icon: <ImageIcon size={16} /> },
-    { key: "publish", label: "Publish & Versions", icon: <Rocket size={16} /> },
+    { key: "content", label: "Content", icon: <FileText size={16} /> },
+    { key: "images", label: "Images", icon: <ImageIcon size={16} /> },
+    { key: "publish", label: "Publish", icon: <Rocket size={16} /> },
   ];
 
   const existingKeys = new Set(blocks.map((b) => b.blockKey));
@@ -253,13 +361,13 @@ export default function CmsDeliveryManager() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex flex-wrap gap-2">
         {tabs.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={() => setTab(item.key)}
-            className={`inline-flex items-center gap-2 rounded-[8px] px-4 py-2 text-sm font-medium transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[8px] px-4 py-2 text-sm font-medium transition-colors ${
               tab === item.key ? "bg-brand-navy text-white" : "bg-white text-brand-muted hover:bg-slate-50"
             }`}
           >
@@ -297,8 +405,8 @@ export default function CmsDeliveryManager() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {(["theme.font.family", "theme.font.weights", "theme.logoUrl"] as const).map((key) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {(["theme.font.family", "theme.font.weights"] as const).map((key) => (
               <div key={key} className="space-y-1">
                 <label className="text-sm font-medium text-brand-navy" htmlFor={`token-${key}`}>
                   {TOKEN_LABELS[key]}
@@ -314,6 +422,51 @@ export default function CmsDeliveryManager() {
             ))}
           </div>
 
+          <div className="space-y-3 rounded-[12px] border border-slate-100 p-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-brand-navy">{TOKEN_LABELS["theme.logoUrl"]}</label>
+              <span className="text-xs text-brand-muted">SVG / PNG · ≤ {LOGO_RECOMMENDATION.maxSize}</span>
+            </div>
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="flex h-20 w-48 shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-slate-100 bg-slate-50 p-2">
+                {tokens["theme.logoUrl"] ? (
+                  <img
+                    src={tokens["theme.logoUrl"]}
+                    alt="Brand logo preview"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="text-xs text-brand-muted">No logo uploaded</span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50">
+                  <Upload size={16} />
+                  {isUploadingLogo ? "Uploading…" : tokens["theme.logoUrl"] ? "Replace logo" : "Upload logo"}
+                  <input
+                    type="file"
+                    accept="image/png,image/svg+xml,image/webp"
+                    className="hidden"
+                    disabled={isUploadingLogo}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handleLogoUpload(file);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                <ul className="space-y-0.5 text-xs leading-relaxed text-brand-muted">
+                  <li>Sizing: {LOGO_RECOMMENDATION.dimensions}</li>
+                  <li>Format: {LOGO_RECOMMENDATION.format}</li>
+                  <li>Background: {LOGO_RECOMMENDATION.background}</li>
+                  <li>Max file size: {LOGO_RECOMMENDATION.maxSize}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <AdminButton onClick={handleSaveTheme} isLoading={isSavingTheme}>
               Save Theme
@@ -326,58 +479,117 @@ export default function CmsDeliveryManager() {
         <div className="space-y-6">
           <AdminCard className="space-y-4 p-6">
             <div>
-              <h2 className="text-lg font-semibold text-brand-navy">Add a content block</h2>
+              <h2 className="text-lg font-semibold text-brand-navy">Add website text</h2>
               <p className="text-sm text-brand-muted">
-                Keyed text the public website reads by key. Footer contact details use the keys
+                A content block is one piece of editable text on the public website, identified by a unique
+                <em className="not-italic font-medium"> key</em>. The website looks up each value by its key — for example,
+                the footer reads its contact details from
                 <code className="mx-1 rounded bg-slate-100 px-1">contact.phone</code>,
                 <code className="mx-1 rounded bg-slate-100 px-1">contact.whatsapp</code>,
-                <code className="mx-1 rounded bg-slate-100 px-1">contact.email</code>,
-                <code className="mx-1 rounded bg-slate-100 px-1">contact.city</code>. Changes go live on Publish.
+                <code className="mx-1 rounded bg-slate-100 px-1">contact.email</code>, and
+                <code className="mx-1 rounded bg-slate-100 px-1">contact.city</code>.
+                Your edits appear on the live site only after you <strong className="font-semibold">Publish</strong>.
               </p>
             </div>
 
             {missingContactKeys.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 rounded-[8px] bg-amber-50 p-3 text-sm text-amber-800">
-                <span>Quick-add missing contact blocks:</span>
+                <span>These contact blocks aren’t set up yet — click to add one:</span>
                 {missingContactKeys.map((key) => (
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setNewBlock({ ...EMPTY_BLOCK, blockKey: key, title: key })}
+                    onClick={() => {
+                      setIsCustomKey(false);
+                      setNewBlock({ ...EMPTY_BLOCK, blockKey: key, title: KNOWN_BLOCK_KEYS[key]?.defaultTitle ?? key });
+                    }}
                     className="inline-flex items-center gap-1 rounded-[6px] bg-white px-2 py-1 text-xs font-medium text-brand-navy hover:bg-slate-50"
                   >
-                    <Plus size={12} /> {key}
+                    <Plus size={12} /> {KNOWN_BLOCK_KEYS[key]?.label ?? key}
                   </button>
                 ))}
               </div>
             )}
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <input
-                aria-label="Block key"
-                type="text"
-                value={newBlock.blockKey}
-                onChange={(e) => setNewBlock({ ...newBlock, blockKey: e.target.value })}
-                placeholder="Block key (e.g. contact.phone)"
-                className="rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
-              />
-              <input
-                aria-label="Title"
-                type="text"
-                value={newBlock.title}
-                onChange={(e) => setNewBlock({ ...newBlock, title: e.target.value })}
-                placeholder="Title (optional label)"
-                className="rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-navy" htmlFor="new-block-key">
+                  What to edit <span className="font-normal text-brand-muted">— pick where this text appears</span>
+                </label>
+                <select
+                  id="new-block-key"
+                  aria-label="Block key"
+                  value={isCustomKey ? CUSTOM_KEY_OPTION : newBlock.blockKey}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === CUSTOM_KEY_OPTION) {
+                      setIsCustomKey(true);
+                      setNewBlock({ ...newBlock, blockKey: "" });
+                      return;
+                    }
+                    setIsCustomKey(false);
+                    setNewBlock({
+                      ...newBlock,
+                      blockKey: value,
+                      title: newBlock.title || KNOWN_BLOCK_KEYS[value]?.defaultTitle || "",
+                    });
+                  }}
+                  className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <option value="" disabled>
+                    Select…
+                  </option>
+                  {Object.entries(KNOWN_BLOCK_KEYS).map(([key, meta]) => {
+                    const alreadyExists = existingKeys.has(key);
+                    return (
+                      <option key={key} value={key} disabled={alreadyExists}>
+                        {meta.label}
+                        {alreadyExists ? " — already added (edit below)" : ""}
+                      </option>
+                    );
+                  })}
+                  <option value={CUSTOM_KEY_OPTION}>Advanced: custom key…</option>
+                </select>
+                {isCustomKey && (
+                  <input
+                    aria-label="Custom block key"
+                    type="text"
+                    value={newBlock.blockKey}
+                    onChange={(e) => setNewBlock({ ...newBlock, blockKey: e.target.value })}
+                    placeholder="custom key, e.g. home.hero.tagline"
+                    className="mt-1 w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+                  />
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-brand-navy" htmlFor="new-block-title">
+                  Title <span className="font-normal text-brand-muted">— internal label, optional</span>
+                </label>
+                <input
+                  id="new-block-title"
+                  aria-label="Title"
+                  type="text"
+                  value={newBlock.title}
+                  onChange={(e) => setNewBlock({ ...newBlock, title: e.target.value })}
+                  placeholder="e.g. Support phone number"
+                  className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-brand-navy" htmlFor="new-block-content">
+                Text shown on the website <span className="font-normal text-brand-muted">— what visitors actually see</span>
+              </label>
+              <textarea
+                id="new-block-content"
+                aria-label="Content"
+                value={newBlock.content}
+                onChange={(e) => setNewBlock({ ...newBlock, content: e.target.value })}
+                placeholder={KNOWN_BLOCK_KEYS[newBlock.blockKey]?.placeholder ?? "e.g. +91 70759 49956"}
+                rows={2}
+                className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
               />
             </div>
-            <textarea
-              aria-label="Content"
-              value={newBlock.content}
-              onChange={(e) => setNewBlock({ ...newBlock, content: e.target.value })}
-              placeholder="Content / value (e.g. 7075949956)"
-              rows={2}
-              className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
-            />
             <div className="flex items-center justify-between">
               <label className="inline-flex items-center gap-2 text-sm text-brand-muted">
                 <input
@@ -387,7 +599,12 @@ export default function CmsDeliveryManager() {
                 />
                 Published
               </label>
-              <AdminButton onClick={handleCreateBlock} isLoading={isCreatingBlock} icon={<Plus size={16} />}>
+              <AdminButton
+                onClick={handleCreateBlock}
+                isLoading={isCreatingBlock}
+                disabled={!newBlock.blockKey.trim() || !newBlock.content.trim()}
+                icon={<Plus size={16} />}
+              >
                 Add block
               </AdminButton>
             </div>
@@ -425,7 +642,7 @@ export default function CmsDeliveryManager() {
                     value={block.content}
                     onChange={(e) => setBlockField(block.cmsBlockId, "content", e.target.value)}
                     rows={3}
-                    placeholder="Content / value"
+                    placeholder="Text shown on the website"
                     className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-sm"
                   />
                   <div className="flex items-center justify-between">
@@ -483,16 +700,16 @@ export default function CmsDeliveryManager() {
 
                     <div className="rounded-[8px] bg-slate-50 p-3">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-brand-muted">Suggested Gemini prompt</span>
+                        <span className="text-xs font-medium text-brand-muted">Suggested AI image prompt</span>
                         <button
                           type="button"
-                          onClick={() => copyPrompt(slot.suggestedAIPrompt)}
+                          onClick={() => copyPrompt(buildImagePrompt(slot))}
                           className="inline-flex items-center gap-1 text-xs text-brand-navy hover:underline"
                         >
                           <Copy size={12} /> Copy
                         </button>
                       </div>
-                      <p className="text-xs leading-relaxed text-slate-600">{slot.suggestedAIPrompt}</p>
+                      <p className="text-xs leading-relaxed text-slate-600">{buildImagePrompt(slot)}</p>
                     </div>
 
                     <label className="inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50">

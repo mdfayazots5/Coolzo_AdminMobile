@@ -6,10 +6,9 @@
 import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { cn } from "@/lib/utils"
-import { UserRole, useAuthStore } from "@/store/auth-store"
+import { useAuthStore } from "@/store/auth-store"
 import { useRBAC } from "@/core/auth/RBACProvider"
 import { authRepository } from "@/core/network/auth-repository"
-import { roleRepository, Role } from "@/core/network/role-repository"
 import { useSystemUX } from "@/core/system/SystemUXProvider"
 import { useLocation, useNavigate, Link } from "react-router-dom"
 import { 
@@ -22,7 +21,6 @@ import {
   Settings, 
   ChevronRight,
   X,
-  Eye,
   ShieldAlert
 } from "lucide-react"
 import { AdminBottomSheet } from "@/components/shared/Pickers"
@@ -32,59 +30,18 @@ import { getNavigationForRole } from "../../../app/navigation/menu"
 
 export function AdminScaffold({ children }: { children: React.ReactNode }) {
   const { user, refreshToken, logout } = useAuthStore()
-  const { canView, effectiveRole, isViewingAsRole, viewAsRole, startViewAsRole, exitViewAsRole } = useRBAC()
+  const { canView, effectiveRole, isViewingAsRole, viewAsRole, exitViewAsRole } = useRBAC()
   const { isOnline } = useSystemUX()
   const location = useLocation()
   const navigate = useNavigate()
   const [isProfileOpen, setIsProfileOpen] = React.useState(false)
   const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
-  const [roles, setRoles] = React.useState<Role[]>([])
-  const [selectedRoleId, setSelectedRoleId] = React.useState("")
-  const [isLoadingRoles, setIsLoadingRoles] = React.useState(false)
-  const [viewAsError, setViewAsError] = React.useState("")
-  const [isStartingViewAs, setIsStartingViewAs] = React.useState(false)
-
-  React.useEffect(() => {
-    if (!isProfileOpen || user?.role !== UserRole.SUPER_ADMIN || roles.length > 0 || isLoadingRoles) {
-      return
-    }
-
-    setIsLoadingRoles(true)
-    roleRepository.getRoles()
-      .then((data) => {
-        const availableRoles = data.filter((role) => role.name !== "Super Administrator" && role.name !== "Super Admin")
-        setRoles(availableRoles)
-        setSelectedRoleId((current) => current || availableRoles[0]?.id || "")
-      })
-      .catch((error) => {
-        console.error("Unable to load roles for view-as-role", error)
-        setViewAsError("Unable to load roles right now")
-      })
-      .finally(() => setIsLoadingRoles(false))
-  }, [isLoadingRoles, isProfileOpen, roles.length, user?.role])
 
   if (!user) return <>{children}</>
 
   const activeRole = effectiveRole || user.role
   const navItems = getNavigationForRole(activeRole).filter((item) => canView(item.module))
-
-  const handleStartViewAsRole = async () => {
-    if (!selectedRoleId) return
-
-    setIsStartingViewAs(true)
-    setViewAsError("")
-
-    try {
-      await startViewAsRole(selectedRoleId)
-      setIsProfileOpen(false)
-    } catch (error) {
-      console.error("View-as-role failed", error)
-      setViewAsError("Unable to start view-as-role mode")
-    } finally {
-      setIsStartingViewAs(false)
-    }
-  }
 
   const handleLogout = async () => {
     try {
@@ -146,11 +103,11 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
               <Menu size={24} className="text-brand-navy" />
             </button>
           )}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex lg:hidden items-center gap-2">
             <div className="size-8 bg-brand-navy rounded-lg flex items-center justify-center text-brand-gold font-bold text-lg">C</div>
             <span className="font-bold text-brand-navy tracking-tight">COOLZO</span>
           </div>
-          <div className="h-6 w-px bg-border mx-2 hidden md:block" />
+          <div className="h-6 w-px bg-border mx-2 hidden md:block lg:hidden" />
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider">Branch</span>
             <span className="text-xs font-bold text-brand-navy">
@@ -258,11 +215,11 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       {/* Profile Quick Panel */}
-      <AdminBottomSheet 
-        isOpen={isProfileOpen} 
+      <AdminBottomSheet
+        isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         title="Account Profile"
-        className="bg-brand-navy text-white"
+        className="bg-brand-navy text-white md:!left-auto md:!right-6 md:!bottom-6 md:!w-[400px] md:!max-w-[calc(100vw-3rem)] md:!rounded-2xl"
       >
         <div className="space-y-6">
           <div className="flex items-center gap-4 p-4 bg-white/10 rounded-2xl">
@@ -275,55 +232,6 @@ export function AdminScaffold({ children }: { children: React.ReactNode }) {
               <RoleBadge role={user.role} />
             </div>
           </div>
-
-          {user.role === UserRole.SUPER_ADMIN && (
-            <div className="space-y-3 rounded-2xl border border-orange-300/30 bg-orange-400/10 p-4">
-              <div className="flex items-center gap-2 text-orange-200">
-                <Eye size={16} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">View As Role</span>
-              </div>
-              <p className="text-xs text-white/60">
-                Starts a scoped UI permission session for navigation and route guards. Exit restores Super Admin access.
-              </p>
-              <div className="flex gap-2">
-                <select
-                  value={selectedRoleId}
-                  onChange={(event) => setSelectedRoleId(event.target.value)}
-                  disabled={isLoadingRoles || isStartingViewAs}
-                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-bold text-white outline-none"
-                >
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id} className="text-brand-navy">
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-                <AdminButton
-                  type="button"
-                  size="sm"
-                  onClick={handleStartViewAsRole}
-                  isLoading={isStartingViewAs}
-                  disabled={!selectedRoleId || isLoadingRoles}
-                  className="bg-orange-300 text-brand-navy hover:bg-orange-200"
-                >
-                  Start
-                </AdminButton>
-              </div>
-              {isViewingAsRole && (
-                <AdminButton
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  fullWidth
-                  onClick={() => void exitViewAsRole()}
-                  className="border-orange-300/40 text-orange-100 hover:bg-orange-300/10"
-                >
-                  Exit View-As Mode
-                </AdminButton>
-              )}
-              {viewAsError && <p className="text-[11px] font-medium text-orange-100">{viewAsError}</p>}
-            </div>
-          )}
 
           <div className="space-y-2">
             <button 
@@ -465,20 +373,6 @@ function SidebarContent({ navItems, logout, location, onItemClick, isMobile }: a
         })}
       </div>
 
-      <div className="p-4 border-t border-white/5">
-        <button 
-          onClick={() => logout()}
-          className="flex items-center gap-4 w-full px-3 py-3 rounded-xl text-brand-muted hover:bg-status-emergency/10 hover:text-status-emergency transition-all group"
-        >
-          <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" />
-          <span className={cn(
-            "text-sm font-bold uppercase tracking-widest",
-            !isMobile && "hidden lg:block"
-          )}>
-            Log Out
-          </span>
-        </button>
-      </div>
     </>
   )
 }

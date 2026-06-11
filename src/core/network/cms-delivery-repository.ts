@@ -4,6 +4,24 @@
  */
 
 import { apiClient } from "./api-client";
+import { EnvConfig } from "../config/env";
+
+/**
+ * Backend returns image URLs relative to the API origin (e.g. "/cms/images/...").
+ * The admin app is served from a different origin (Vite dev server), so relative
+ * URLs would resolve against the wrong host and 404. Prefix them with the API
+ * origin; pass through absolute (http/https/data) URLs untouched.
+ */
+function resolveImageUrl(url: string): string {
+  if (!url || /^(https?:|data:)/i.test(url)) {
+    return url;
+  }
+  return `${EnvConfig.API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
+function mapImageSlot(slot: ScreenImageSlot): ScreenImageSlot {
+  return { ...slot, imageUrl: resolveImageUrl(slot.imageUrl) };
+}
 
 /** Theme token keys mirror Backend SnapshotKeys.Theme.* */
 export const THEME_TOKEN_KEYS = [
@@ -63,6 +81,17 @@ export interface ScreenImageUpload {
   altText?: string;
 }
 
+export interface CmsAssetUpload {
+  fileName: string;
+  contentType: string;
+  base64Content: string;
+  assetKey?: string;
+}
+
+export interface CmsAssetUploadResult {
+  imageUrl: string;
+}
+
 export interface SnapshotManifest {
   version: number;
   bucketUrl: string;
@@ -120,22 +149,27 @@ export const cmsDeliveryRepository = {
     const response = await apiClient.get<ScreenImageSlot[]>("/api/cms/admin/image-slots", {
       params: { pageKey },
     });
-    return response.data;
+    return response.data.map(mapImageSlot);
   },
 
   async createImageSlot(payload: ScreenImageSlotUpsert): Promise<ScreenImageSlot> {
     const response = await apiClient.post<ScreenImageSlot>("/api/cms/admin/image-slots", payload);
-    return response.data;
+    return mapImageSlot(response.data);
   },
 
   async updateImageSlot(id: number, payload: ScreenImageSlotUpsert): Promise<ScreenImageSlot> {
     const response = await apiClient.put<ScreenImageSlot>(`/api/cms/admin/image-slots/${id}`, payload);
-    return response.data;
+    return mapImageSlot(response.data);
   },
 
   async uploadImage(id: number, payload: ScreenImageUpload): Promise<ScreenImageSlot> {
     const response = await apiClient.post<ScreenImageSlot>(`/api/cms/admin/image-slots/${id}/upload`, payload);
-    return response.data;
+    return mapImageSlot(response.data);
+  },
+
+  async uploadAsset(payload: CmsAssetUpload): Promise<CmsAssetUploadResult> {
+    const response = await apiClient.post<CmsAssetUploadResult>("/api/cms/admin/assets/upload", payload);
+    return { imageUrl: resolveImageUrl(response.data.imageUrl) };
   },
 
   async publish(): Promise<SnapshotManifest> {
