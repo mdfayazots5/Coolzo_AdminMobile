@@ -105,13 +105,10 @@ const KNOWN_BLOCK_KEYS: Record<string, { label: string; defaultTitle: string; pl
   "contact.whatsapp": { label: "WhatsApp number (footer)", defaultTitle: "WhatsApp number", placeholder: "e.g. +91 70759 49956" },
   "contact.email": { label: "Email address (footer)", defaultTitle: "Support email", placeholder: "e.g. care@coolzo.com" },
   "contact.city": { label: "City / location (footer)", defaultTitle: "Service city", placeholder: "e.g. Hyderabad" },
-  // Home page hero (read by Home.tsx)
-  "home.hero.eyebrow": { label: "Home · hero — small label", defaultTitle: "Home hero eyebrow", placeholder: "e.g. AC Repair · Service · Installation · Gas Refill" },
-  "home.hero.title": { label: "Home · hero — headline", defaultTitle: "Home hero headline", placeholder: "e.g. Cool, clean air — booked in 60 seconds." },
-  "home.hero.subtitle": { label: "Home · hero — subtitle", defaultTitle: "Home hero subtitle", placeholder: "e.g. Certified AC technicians across Hyderabad…" },
-  // Home page closing call-to-action (read by Home.tsx)
-  "home.cta.title": { label: "Home · bottom CTA — headline", defaultTitle: "Home CTA headline", placeholder: "e.g. Ready for reliable cooling?" },
-  "home.cta.subtitle": { label: "Home · bottom CTA — subtitle", defaultTitle: "Home CTA subtitle", placeholder: "e.g. Book a certified technician now…" },
+  // Section blocks — Title = heading shown on the site, Text = body shown on the site.
+  "home.hero": { label: "Home · hero (heading + text)", defaultTitle: "Coolzo Keeps Every AC Season Running", placeholder: "Hero body, e.g. Fast booking, transparent billing, dependable service." },
+  "home.about": { label: "Home · about section (heading + text)", defaultTitle: "Why customers choose Coolzo", placeholder: "About body, e.g. Certified technicians and CMS-driven support." },
+  "service-content.general-service": { label: "Services · banner (heading + text)", defaultTitle: "General AC Service", placeholder: "Services intro, e.g. Routine service includes cleaning, airflow validation…" },
 };
 
 const CUSTOM_KEY_OPTION = "__custom__";
@@ -563,7 +560,7 @@ export default function CmsDeliveryManager() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-brand-navy" htmlFor="new-block-title">
-                  Title <span className="font-normal text-brand-muted">— internal label, optional</span>
+                  Title <span className="font-normal text-brand-muted">— heading shown on the site (label only for contact rows)</span>
                 </label>
                 <input
                   id="new-block-title"
