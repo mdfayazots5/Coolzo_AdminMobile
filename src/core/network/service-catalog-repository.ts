@@ -20,6 +20,7 @@ export interface AdminServiceItem {
 export interface AdminServiceCategory {
   serviceCategoryId: number
   categoryName: string
+  description?: string
 }
 
 export const serviceCatalogRepository = {

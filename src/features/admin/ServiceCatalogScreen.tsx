@@ -20,9 +20,21 @@ import {
   sortBySortOrder,
   toSlugCode,
 } from "./configuration-utils"
-import { Image as ImageIcon, Layers3, PackageSearch, Plus, Save, Trash2 } from "lucide-react"
+import { Image as ImageIcon, Layers3, PackageSearch, Plus, Save, Trash2, Upload } from "lucide-react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
+
+/** Reads a File into a base64 payload (strips the data: prefix) for the master-image upload API. */
+const readFileAsBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.slice(result.indexOf(",") + 1))
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 
 // NOTE: "service-types" was retired here (Phase 3). Bookable services live in tblService — manage their
 // images in Settings → Service Images. This screen now covers subtypes + equipment taxonomies only.
@@ -66,6 +78,16 @@ const SECTION_META: Record<CatalogSection, { title: string; description: string 
     description: "Brand-linked equipment models with tonnage and compatibility metadata.",
   },
 }
+
+// Top-level tabs. "catalog" = read-only Services + Categories overview (with image upload);
+// the rest are the editable master-data sections (form + list).
+type TabKey = "catalog" | CatalogSection
+const TABS: { key: TabKey; title: string }[] = [
+  { key: "catalog", title: "Catalog" },
+  { key: "service-subtypes", title: "Service Subtypes" },
+  { key: "equipment-brands", title: "Equipment Brands" },
+  { key: "equipment-models", title: "Equipment Models" },
+]
 
 const createEmptyForm = (sortOrder = 1): CatalogFormState => ({
   code: "",
@@ -169,10 +191,14 @@ const buildPayload = (section: CatalogSection, form: CatalogFormState): MasterDa
 }
 
 export default function ServiceCatalogScreen() {
-  const { masterData, loadMasterData, saveMasterData, removeMasterData } = useMasterData()
-  const [activeSection, setActiveSection] = React.useState<CatalogSection>("service-subtypes")
+  const { masterData, loadMasterData, saveMasterData, removeMasterData, uploadMasterImage } = useMasterData()
+  const [activeTab, setActiveTab] = React.useState<TabKey>("catalog")
+  // The editor form/list operate on a concrete master section; on the "catalog" tab the editor is
+  // hidden, so we fall back to a default section to keep the form helpers well-typed.
+  const activeSection: CatalogSection = activeTab === "catalog" ? "service-subtypes" : activeTab
   const [services, setServices] = React.useState<AdminServiceItem[]>([])
   const [categories, setCategories] = React.useState<AdminServiceCategory[]>([])
+  const [imageBusyId, setImageBusyId] = React.useState<number | null>(null)
   const [form, setForm] = React.useState<CatalogFormState>(createEmptyForm())
   const [isLoading, setIsLoading] = React.useState(true)
   const [isSaving, setIsSaving] = React.useState(false)
@@ -228,10 +254,59 @@ export default function ServiceCatalogScreen() {
   )
 
   React.useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && activeTab !== "catalog") {
       resetForm(activeSection)
     }
-  }, [activeSection, isLoading, resetForm])
+  }, [activeTab, activeSection, isLoading, resetForm])
+
+  const applyServiceImage = (serviceId: number, imageUrl: string) => {
+    setServices((current) =>
+      current.map((service) => (service.serviceId === serviceId ? { ...service, imageUrl } : service))
+    )
+  }
+
+  const handleServiceImageUpload = async (service: AdminServiceItem, file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must not exceed 5 MB")
+      return
+    }
+
+    setImageBusyId(service.serviceId)
+    try {
+      const base64Content = await readFileAsBase64(file)
+      const url = await uploadMasterImage("services", {
+        fileName: file.name,
+        contentType: file.type,
+        base64Content,
+      })
+      await serviceCatalogRepository.setServiceImage(service.serviceId, url)
+      applyServiceImage(service.serviceId, url)
+      toast.success(`Image saved for ${service.serviceName}`)
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to upload image")
+    } finally {
+      setImageBusyId(null)
+    }
+  }
+
+  const handleServiceImageRemove = async (service: AdminServiceItem) => {
+    setImageBusyId(service.serviceId)
+    try {
+      await serviceCatalogRepository.setServiceImage(service.serviceId, null)
+      applyServiceImage(service.serviceId, "")
+      toast.success(`Image removed for ${service.serviceName}`)
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to remove image")
+    } finally {
+      setImageBusyId(null)
+    }
+  }
 
   const handleSave = async () => {
     if (!form.label.trim()) {
@@ -282,19 +357,41 @@ export default function ServiceCatalogScreen() {
         <div>
           <h1 className="text-2xl font-bold text-brand-navy">Service & Equipment Catalog</h1>
           <p className="text-sm text-brand-muted">
-            Maintain service subtypes, equipment brands, and model definitions. Bookable service photos are
-            managed in Settings → Service Images.
+            Review bookable services and categories, manage service photos, and maintain service subtypes
+            and equipment taxonomies — all in one place.
           </p>
         </div>
-        <AdminButton
-          variant="secondary"
-          onClick={() => resetForm(activeSection)}
-          iconLeft={<Plus size={18} />}
-        >
-          New {SECTION_META[activeSection].title.slice(0, -1)}
-        </AdminButton>
+        {activeTab !== "catalog" && (
+          <AdminButton
+            variant="secondary"
+            onClick={() => resetForm(activeSection)}
+            iconLeft={<Plus size={18} />}
+          >
+            New {SECTION_META[activeSection].title.slice(0, -1)}
+          </AdminButton>
+        )}
       </div>
 
+      {/* Top-level tabs: Catalog overview vs the editable master sections. */}
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+              activeTab === tab.key
+                ? "border-brand-gold text-brand-navy"
+                : "border-transparent text-brand-muted hover:text-brand-navy"
+            }`}
+          >
+            {tab.title}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "catalog" && (
+        <>
       {/* Bookable Services — read-only reference (definitions live in tblService; photos are
           managed in Settings → Service Images). Shown here so the catalog is visible at a glance. */}
       <AdminCard className="p-6 space-y-4">
@@ -315,58 +412,102 @@ export default function ServiceCatalogScreen() {
           <p className="text-sm text-brand-muted">No bookable services found.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {services.map((service) => (
-              <div key={service.serviceId} className="flex items-center gap-4 rounded-[12px] border border-border p-3">
-                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-[8px] border border-border bg-brand-surface">
-                  {service.imageUrl ? (
-                    <img src={service.imageUrl} alt={service.serviceName} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-brand-muted">
-                      <ImageIcon size={18} />
-                    </div>
-                  )}
+            {services.map((service) => {
+              const isImageBusy = imageBusyId === service.serviceId
+              return (
+                <div key={service.serviceId} className="flex items-center gap-4 rounded-[12px] border border-border p-3">
+                  <div className="h-14 w-20 shrink-0 overflow-hidden rounded-[8px] border border-border bg-brand-surface">
+                    {service.imageUrl ? (
+                      <img src={service.imageUrl} alt={service.serviceName} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-brand-muted">
+                        <ImageIcon size={18} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-bold text-brand-navy">{service.serviceName}</h3>
+                    <p className="text-xs text-brand-muted">
+                      {categoryNameById.get(service.serviceCategoryId) || "Uncategorised"}
+                      {service.pricingModelName ? ` · ${service.pricingModelName}` : ""}
+                    </p>
+                    <p className="text-xs font-bold text-brand-navy mt-0.5">
+                      {service.basePrice != null ? `₹${service.basePrice.toLocaleString("en-IN")}` : "—"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-[8px] border border-border bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-navy hover:border-brand-navy/30">
+                      <Upload size={14} />
+                      {isImageBusy ? "Saving…" : service.imageUrl ? "Replace" : "Upload"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        disabled={isImageBusy}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          if (file) {
+                            void handleServiceImageUpload(service, file)
+                          }
+                          event.target.value = ""
+                        }}
+                      />
+                    </label>
+                    {service.imageUrl && (
+                      <button
+                        type="button"
+                        disabled={isImageBusy}
+                        onClick={() => void handleServiceImageRemove(service)}
+                        className="text-[11px] font-semibold text-brand-muted hover:text-red-600 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-bold text-brand-navy">{service.serviceName}</h3>
-                  <p className="text-xs text-brand-muted">
-                    {categoryNameById.get(service.serviceCategoryId) || "Uncategorised"}
-                    {service.pricingModelName ? ` · ${service.pricingModelName}` : ""}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-bold text-brand-navy">
-                    {service.basePrice != null ? `₹${service.basePrice.toLocaleString("en-IN")}` : "—"}
-                  </p>
-                  <Link
-                    to="/settings/master/service-images"
-                    className="text-[11px] font-semibold text-brand-gold hover:underline"
-                  >
-                    {service.imageUrl ? "Change image" : "Add image"}
-                  </Link>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </AdminCard>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {(Object.keys(SECTION_META) as CatalogSection[]).map((section) => (
-          <button
-            key={section}
-            type="button"
-            onClick={() => setActiveSection(section)}
-            className={`rounded-2xl border p-4 text-left transition-all ${
-              activeSection === section
-                ? "border-brand-gold bg-brand-gold/10"
-                : "border-border bg-white hover:border-brand-navy/20"
-            }`}
-          >
-            <p className="text-sm font-bold text-brand-navy">{SECTION_META[section].title}</p>
-            <p className="mt-1 text-xs text-brand-muted leading-relaxed">{SECTION_META[section].description}</p>
-          </button>
-        ))}
-      </div>
+      {/* Service Categories — read-only list (top-level grouping for bookable services).
+          Editing categories needs dedicated backend endpoints (not yet available). */}
+      <AdminCard className="p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Layers3 size={18} className="text-brand-navy" />
+          <h2 className="text-lg font-bold text-brand-navy">Service Categories</h2>
+          <span className="text-xs text-brand-muted">({categories.length})</span>
+        </div>
+        {categories.length === 0 ? (
+          <p className="text-sm text-brand-muted">No service categories found.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {categories.map((category) => {
+              const count = services.filter((service) => service.serviceCategoryId === category.serviceCategoryId).length
+              return (
+                <div key={category.serviceCategoryId} className="rounded-[12px] border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-brand-navy">{category.categoryName}</h3>
+                    <span className="shrink-0 text-[11px] font-bold uppercase tracking-widest text-brand-gold">
+                      {count} {count === 1 ? "service" : "services"}
+                    </span>
+                  </div>
+                  {category.description && (
+                    <p className="mt-1 text-xs text-brand-muted leading-relaxed">{category.description}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </AdminCard>
+        </>
+      )}
+
+      {activeTab !== "catalog" && (
+        <>
+      <p className="-mt-2 text-sm text-brand-muted">{SECTION_META[activeSection].description}</p>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1.4fr] gap-6">
         <AdminCard className="p-6 space-y-5">
@@ -604,6 +745,8 @@ export default function ServiceCatalogScreen() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }
