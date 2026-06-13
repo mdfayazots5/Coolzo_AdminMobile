@@ -16,10 +16,22 @@ export interface AdminServiceItem {
   imageUrl: string
 }
 
+/** A service category (tblServiceCategory) — used to label services in the catalog view. */
+export interface AdminServiceCategory {
+  serviceCategoryId: number
+  categoryName: string
+}
+
 export const serviceCatalogRepository = {
   /** Lists active bookable services (reuses the public booking-lookup; now carries imageUrl). */
   async getServices(): Promise<AdminServiceItem[]> {
     const response = await apiClient.get<AdminServiceItem[]>("/api/booking-lookups/services")
+    return response.data
+  },
+
+  /** Lists service categories — used to show each service's category name. */
+  async getServiceCategories(): Promise<AdminServiceCategory[]> {
+    const response = await apiClient.get<AdminServiceCategory[]>("/api/booking-lookups/service-categories")
     return response.data
   },
 

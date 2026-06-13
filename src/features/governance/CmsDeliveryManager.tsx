@@ -109,6 +109,11 @@ const KNOWN_BLOCK_KEYS: Record<string, { label: string; defaultTitle: string; pl
   "home.hero": { label: "Home · hero (heading + text)", defaultTitle: "Coolzo Keeps Every AC Season Running", placeholder: "Hero body, e.g. Fast booking, transparent billing, dependable service." },
   "home.about": { label: "Home · about section (heading + text)", defaultTitle: "Why customers choose Coolzo", placeholder: "About body, e.g. Certified technicians and CMS-driven support." },
   "service-content.general-service": { label: "Services · banner (heading + text)", defaultTitle: "General AC Service", placeholder: "Services intro, e.g. Routine service includes cleaning, airflow validation…" },
+  // Home hero trust-strip stats — Title = the figure shown, Text = its caption/label.
+  "home.stat.rating": { label: "Home · stat · rating (figure + caption)", defaultTitle: "4.9/5", placeholder: "Caption, e.g. across Hyderabad" },
+  "home.stat.zones": { label: "Home · stat · zones (figure + caption)", defaultTitle: "20+", placeholder: "Caption, e.g. Zones Covered" },
+  "home.stat.technicians": { label: "Home · stat · technicians (figure + caption)", defaultTitle: "500+", placeholder: "Caption, e.g. Certified Technicians" },
+  "home.stat.response": { label: "Home · stat · response (figure + caption)", defaultTitle: "4 hr", placeholder: "Caption, e.g. Emergency Response" },
 };
 
 const CUSTOM_KEY_OPTION = "__custom__";

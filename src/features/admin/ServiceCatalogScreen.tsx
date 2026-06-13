@@ -11,7 +11,7 @@ import { AdminButton } from "@/components/shared/AdminButton"
 import { AdminTextField } from "@/components/shared/AdminTextField"
 import { useMasterData } from "@/core/master-data/MasterDataProvider"
 import type { MasterDataRecord, MasterDataRecordInput, MasterDataSlug } from "@/core/network/master-data-repository"
-import { serviceCatalogRepository, type AdminServiceItem } from "@/core/network/service-catalog-repository"
+import { serviceCatalogRepository, type AdminServiceItem, type AdminServiceCategory } from "@/core/network/service-catalog-repository"
 import {
   asOptionalNumber,
   getMetadataNumber,
@@ -20,7 +20,8 @@ import {
   sortBySortOrder,
   toSlugCode,
 } from "./configuration-utils"
-import { Layers3, PackageSearch, Plus, Save, Trash2 } from "lucide-react"
+import { Image as ImageIcon, Layers3, PackageSearch, Plus, Save, Trash2 } from "lucide-react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
 // NOTE: "service-types" was retired here (Phase 3). Bookable services live in tblService — manage their
@@ -171,6 +172,7 @@ export default function ServiceCatalogScreen() {
   const { masterData, loadMasterData, saveMasterData, removeMasterData } = useMasterData()
   const [activeSection, setActiveSection] = React.useState<CatalogSection>("service-subtypes")
   const [services, setServices] = React.useState<AdminServiceItem[]>([])
+  const [categories, setCategories] = React.useState<AdminServiceCategory[]>([])
   const [form, setForm] = React.useState<CatalogFormState>(createEmptyForm())
   const [isLoading, setIsLoading] = React.useState(true)
   const [isSaving, setIsSaving] = React.useState(false)
@@ -184,9 +186,15 @@ export default function ServiceCatalogScreen() {
           loadMasterData("equipment-models"),
         ])
 
-        // Real bookable services (tblService) drive the subtype "parent" picker.
+        // Real bookable services (tblService) — shown in the reference panel and the subtype
+        // "parent" picker. Categories label each service.
         try {
-          setServices(await serviceCatalogRepository.getServices())
+          const [serviceList, categoryList] = await Promise.all([
+            serviceCatalogRepository.getServices(),
+            serviceCatalogRepository.getServiceCategories(),
+          ])
+          setServices(serviceList)
+          setCategories(categoryList)
         } catch (serviceError) {
           console.error(serviceError)
         }
@@ -205,6 +213,11 @@ export default function ServiceCatalogScreen() {
 
   const records: MasterDataRecord[] = sortBySortOrder(masterData[activeSection] || [])
   const equipmentBrands: MasterDataRecord[] = sortBySortOrder(masterData["equipment-brands"] || [])
+  const categoryNameById = React.useMemo(() => {
+    const map = new Map<number, string>()
+    categories.forEach((category) => map.set(category.serviceCategoryId, category.categoryName))
+    return map
+  }, [categories])
 
   const resetForm = React.useCallback(
     (section: CatalogSection, record?: MasterDataRecord) => {
@@ -281,6 +294,61 @@ export default function ServiceCatalogScreen() {
           New {SECTION_META[activeSection].title.slice(0, -1)}
         </AdminButton>
       </div>
+
+      {/* Bookable Services — read-only reference (definitions live in tblService; photos are
+          managed in Settings → Service Images). Shown here so the catalog is visible at a glance. */}
+      <AdminCard className="p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <PackageSearch size={18} className="text-brand-navy" />
+            <h2 className="text-lg font-bold text-brand-navy">Bookable Services</h2>
+            <span className="text-xs text-brand-muted">({services.length})</span>
+          </div>
+          <Link
+            to="/settings/master/service-images"
+            className="text-sm font-semibold text-brand-navy hover:text-brand-gold"
+          >
+            Manage images →
+          </Link>
+        </div>
+        {services.length === 0 ? (
+          <p className="text-sm text-brand-muted">No bookable services found.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {services.map((service) => (
+              <div key={service.serviceId} className="flex items-center gap-4 rounded-[12px] border border-border p-3">
+                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-[8px] border border-border bg-brand-surface">
+                  {service.imageUrl ? (
+                    <img src={service.imageUrl} alt={service.serviceName} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-brand-muted">
+                      <ImageIcon size={18} />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate font-bold text-brand-navy">{service.serviceName}</h3>
+                  <p className="text-xs text-brand-muted">
+                    {categoryNameById.get(service.serviceCategoryId) || "Uncategorised"}
+                    {service.pricingModelName ? ` · ${service.pricingModelName}` : ""}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-bold text-brand-navy">
+                    {service.basePrice != null ? `₹${service.basePrice.toLocaleString("en-IN")}` : "—"}
+                  </p>
+                  <Link
+                    to="/settings/master/service-images"
+                    className="text-[11px] font-semibold text-brand-gold hover:underline"
+                  >
+                    {service.imageUrl ? "Change image" : "Add image"}
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </AdminCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {(Object.keys(SECTION_META) as CatalogSection[]).map((section) => (
