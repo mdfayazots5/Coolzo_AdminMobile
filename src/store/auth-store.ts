@@ -112,17 +112,52 @@ export const useAuthStore = create<AuthState>((set) => ({
     const token = LocalStorage.get<string>(StorageKey.AUTH_TOKEN);
     const refreshToken = LocalStorage.get<string>(StorageKey.REFRESH_TOKEN);
     const user = LocalStorage.get<UserProfile>(StorageKey.USER_PROFILE);
-    
-    if (token && user) {
-      set({ 
-        user, 
-        token, 
-        refreshToken, 
-        status: AuthStatus.AUTHENTICATED, 
-        isInitialized: true 
-      });
-    } else {
+
+    // No stored session: stay unauthenticated so the router lands on /login.
+    if (!token || !user) {
       set({ isInitialized: true });
+      return;
+    }
+
+    // A stored token may be expired/revoked. Validate it against the backend
+    // before granting AUTHENTICATED, otherwise the dashboard mounts on a dead
+    // session and renders blank/broken instead of routing to login.
+    // skipAuthRefresh keeps this startup check in full control of the outcome.
+    // authRepository is imported lazily here (not at module top) to avoid a
+    // circular-import cycle: auth-repository → auth-session reads UserRole from
+    // this module at load time, so a static import would leave it undefined.
+    const { authRepository } = await import('../core/network/auth-repository');
+
+    try {
+      const validatedUser = await authRepository.getUserProfile({ skipAuthRefresh: true });
+      LocalStorage.set(StorageKey.USER_ROLE, validatedUser.role);
+      LocalStorage.set(StorageKey.USER_PROFILE, validatedUser);
+      set({ user: validatedUser, token, refreshToken, status: AuthStatus.AUTHENTICATED, isInitialized: true });
+      return;
+    } catch (_validationError) {
+      // Access token rejected — attempt a single refresh before forcing login.
+      if (refreshToken) {
+        try {
+          const refreshed = await authRepository.refreshToken(token, refreshToken);
+          LocalStorage.set(StorageKey.AUTH_TOKEN, refreshed.token);
+          LocalStorage.set(StorageKey.REFRESH_TOKEN, refreshed.refreshToken);
+          LocalStorage.set(StorageKey.USER_ROLE, refreshed.user.role);
+          LocalStorage.set(StorageKey.USER_PROFILE, refreshed.user);
+          set({
+            user: refreshed.user,
+            token: refreshed.token,
+            refreshToken: refreshed.refreshToken,
+            status: AuthStatus.AUTHENTICATED,
+            isInitialized: true,
+          });
+          return;
+        } catch (_refreshError) {
+          // fall through to forced login
+        }
+      }
+
+      clearAuthStorage();
+      set({ user: null, token: null, refreshToken: null, status: AuthStatus.UNAUTHENTICATED, isInitialized: true });
     }
   },
 }));

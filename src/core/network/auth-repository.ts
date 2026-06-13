@@ -42,7 +42,7 @@ export interface AuthRepository {
   resetPassword(token: string, password: string): Promise<void>;
   logout(refreshToken: string): Promise<void>;
   forceLogout(userId: string): Promise<void>;
-  getUserProfile(): Promise<UserProfile>;
+  getUserProfile(options?: { skipAuthRefresh?: boolean }): Promise<UserProfile>;
   getPermissionSnapshot(user: UserProfile): Promise<PermissionSnapshot>;
   viewAsRole(roleId: string): Promise<ViewAsRoleSession>;
 }
@@ -200,8 +200,11 @@ export class LiveAuthRepository implements AuthRepository {
     await apiClient.post(`/api/auth/force-logout/${userId}`);
   }
 
-  async getUserProfile(): Promise<UserProfile> {
-    const response = await apiClient.get<{ currentUser?: BackendAuthTokenResponse["currentUser"] } & BackendCurrentUser>('/api/auth/me');
+  async getUserProfile(options?: { skipAuthRefresh?: boolean }): Promise<UserProfile> {
+    const response = await apiClient.get<{ currentUser?: BackendAuthTokenResponse["currentUser"] } & BackendCurrentUser>(
+      '/api/auth/me',
+      options?.skipAuthRefresh ? ({ _skipAuthRefresh: true } as never) : undefined,
+    );
     return mapBackendCurrentUser((response.data as BackendCurrentUser));
   }
 
