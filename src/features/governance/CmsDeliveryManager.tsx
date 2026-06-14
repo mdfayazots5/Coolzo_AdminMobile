@@ -9,6 +9,7 @@ import { Copy, FileText, Image as ImageIcon, Palette, Plus, RefreshCw, Rocket, S
 import { AdminCard } from "@/components/shared/Cards";
 import { AdminButton } from "@/components/shared/AdminButton";
 import { InlineLoader } from "@/components/shared/Layout";
+import ImageCropModal, { type CroppedImage } from "@/components/shared/ImageCropModal";
 import {
   cmsDeliveryRepository,
   CmsBlock,
@@ -148,6 +149,7 @@ export default function CmsDeliveryManager() {
   const [rollbackVersion, setRollbackVersion] = React.useState("");
   const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
   const [isCustomKey, setIsCustomKey] = React.useState(false);
+  const [slotCrop, setSlotCrop] = React.useState<{ slot: ScreenImageSlot; file: File } | null>(null);
 
   const reload = React.useCallback(async () => {
     const [theme, slotList, blockList, currentManifest] = await Promise.all([
@@ -251,13 +253,23 @@ export default function CmsDeliveryManager() {
     }
   };
 
-  const handleUpload = async (slot: ScreenImageSlot, file: File) => {
+  const handleSlotFileSelected = (slot: ScreenImageSlot, file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
+    // Open the cropper locked to this slot's exact recommended dimensions so the uploaded image
+    // always fills the slot (no letterboxing) regardless of the source image's size.
+    setSlotCrop({ slot, file });
+  };
+
+  const uploadSlotCropped = async (slot: ScreenImageSlot, cropped: CroppedImage) => {
+    setSlotCrop(null);
     try {
-      const base64Content = await readFileAsBase64(file);
       const updated = await cmsDeliveryRepository.uploadImage(slot.screenImageSlotId, {
-        fileName: file.name,
-        contentType: file.type,
-        base64Content,
+        fileName: cropped.fileName,
+        contentType: cropped.contentType,
+        base64Content: cropped.base64Content,
         altText: slot.altText,
       });
       setSlots((current) =>
@@ -723,7 +735,7 @@ export default function CmsDeliveryManager() {
                         className="hidden"
                         onChange={(event) => {
                           const file = event.target.files?.[0];
-                          if (file) void handleUpload(slot, file);
+                          if (file) handleSlotFileSelected(slot, file);
                           event.target.value = "";
                         }}
                       />
@@ -780,6 +792,17 @@ export default function CmsDeliveryManager() {
             </div>
           </AdminCard>
         </div>
+      )}
+
+      {slotCrop && (
+        <ImageCropModal
+          file={slotCrop.file}
+          targetWidth={slotCrop.slot.recommendedWidth}
+          targetHeight={slotCrop.slot.recommendedHeight}
+          title={`Crop ${slotCrop.slot.slotKey} · ${slotCrop.slot.breakpoint}`}
+          onCancel={() => setSlotCrop(null)}
+          onCropped={(result) => void uploadSlotCropped(slotCrop.slot, result)}
+        />
       )}
     </div>
   );

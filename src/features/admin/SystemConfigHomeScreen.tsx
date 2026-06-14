@@ -70,10 +70,10 @@ export default function SystemConfigHomeScreen() {
       items: [
         {
           id: "catalog",
-          label: "Service & Equipment",
+          label: "Service Catalog",
           icon: <Wrench size={20} />,
           path: "/settings/master/services",
-          description: "Service types, subtypes, brands, and model mappings",
+          description: "Service categories and bookable services (pricing + photos)",
         },
         {
           id: "service-images",

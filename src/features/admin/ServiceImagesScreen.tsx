@@ -10,24 +10,15 @@ import { AdminButton } from "@/components/shared/AdminButton"
 import { useMasterData } from "@/core/master-data/MasterDataProvider"
 import { serviceCatalogRepository, type AdminServiceItem } from "@/core/network/service-catalog-repository"
 import { Image as ImageIcon, PackageSearch, Upload } from "lucide-react"
+import ImageCropModal, { type CroppedImage } from "@/components/shared/ImageCropModal"
 import { toast } from "sonner"
-
-const readFileAsBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.slice(result.indexOf(",") + 1))
-    }
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
 
 export default function ServiceImagesScreen() {
   const { uploadMasterImage } = useMasterData()
   const [services, setServices] = React.useState<AdminServiceItem[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [busyId, setBusyId] = React.useState<number | null>(null)
+  const [cropTarget, setCropTarget] = React.useState<{ service: AdminServiceItem; file: File } | null>(null)
 
   React.useEffect(() => {
     const load = async () => {
@@ -50,24 +41,19 @@ export default function ServiceImagesScreen() {
     )
   }
 
-  const handleUpload = async (service: AdminServiceItem, file: File) => {
+  const handleFileSelected = (service: AdminServiceItem, file: File) => {
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file")
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must not exceed 5 MB")
-      return
-    }
+    setCropTarget({ service, file })
+  }
 
+  const uploadCropped = async (service: AdminServiceItem, cropped: CroppedImage) => {
+    setCropTarget(null)
     setBusyId(service.serviceId)
     try {
-      const base64Content = await readFileAsBase64(file)
-      const url = await uploadMasterImage("services", {
-        fileName: file.name,
-        contentType: file.type,
-        base64Content,
-      })
+      const url = await uploadMasterImage("services", cropped)
       await serviceCatalogRepository.setServiceImage(service.serviceId, url)
       applyImage(service.serviceId, url)
       toast.success(`Image saved for ${service.serviceName}`)
@@ -145,7 +131,7 @@ export default function ServiceImagesScreen() {
                           onChange={(event) => {
                             const file = event.target.files?.[0]
                             if (file) {
-                              void handleUpload(service, file)
+                              handleFileSelected(service, file)
                             }
                             event.target.value = ""
                           }}
@@ -169,6 +155,17 @@ export default function ServiceImagesScreen() {
             )
           })}
         </div>
+      )}
+
+      {cropTarget && (
+        <ImageCropModal
+          file={cropTarget.file}
+          targetWidth={1280}
+          targetHeight={720}
+          title="Crop service image (16:9)"
+          onCancel={() => setCropTarget(null)}
+          onCropped={(result) => void uploadCropped(cropTarget.service, result)}
+        />
       )}
     </div>
   )
