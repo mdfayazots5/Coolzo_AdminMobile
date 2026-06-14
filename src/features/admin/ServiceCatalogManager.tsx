@@ -27,6 +27,7 @@ interface CategoryForm {
   categoryName: string
   categoryCode: string
   description: string
+  imageUrl: string | null
   isActive: boolean
   sortOrder: string
 }
@@ -82,6 +83,8 @@ export default function ServiceCatalogManager() {
   const [isSaving, setIsSaving] = React.useState(false)
   const [imageBusy, setImageBusy] = React.useState(false)
   const [cropFile, setCropFile] = React.useState<File | null>(null)
+  const [categoryImageBusy, setCategoryImageBusy] = React.useState(false)
+  const [categoryCropFile, setCategoryCropFile] = React.useState<File | null>(null)
 
   const loadCatalog = React.useCallback(async () => {
     try {
@@ -111,7 +114,7 @@ export default function ServiceCatalogManager() {
   // ── Category modal ───────────────────────────────────────────────────────
   const openCreateCategory = () => {
     const nextSort = (catalog?.categories.length ?? 0) + 1
-    setCategoryForm({ categoryName: "", categoryCode: "", description: "", isActive: true, sortOrder: String(nextSort) })
+    setCategoryForm({ categoryName: "", categoryCode: "", description: "", imageUrl: null, isActive: true, sortOrder: String(nextSort) })
   }
 
   const openEditCategory = (category: AdminCatalogCategory) => {
@@ -120,9 +123,33 @@ export default function ServiceCatalogManager() {
       categoryName: category.categoryName,
       categoryCode: category.categoryCode,
       description: category.description,
+      imageUrl: category.imageUrl,
       isActive: category.isActive,
       sortOrder: String(category.sortOrder),
     })
+  }
+
+  const handleCategoryFileSelected = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+    setCategoryCropFile(file)
+  }
+
+  const uploadCroppedCategoryImage = async (cropped: CroppedImage) => {
+    setCategoryCropFile(null)
+    setCategoryImageBusy(true)
+    try {
+      const url = await uploadMasterImage("categories", cropped)
+      setCategoryForm((current) => (current ? { ...current, imageUrl: url } : current))
+      toast.success("Image uploaded")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to upload image")
+    } finally {
+      setCategoryImageBusy(false)
+    }
   }
 
   const saveCategory = async () => {
@@ -135,6 +162,7 @@ export default function ServiceCatalogManager() {
       categoryName: categoryForm.categoryName.trim(),
       categoryCode: categoryForm.categoryCode.trim() || null,
       description: categoryForm.description.trim() || null,
+      imageUrl: categoryForm.imageUrl,
       isActive: categoryForm.isActive,
       sortOrder: Number(categoryForm.sortOrder) || 0,
     }
@@ -291,11 +319,9 @@ export default function ServiceCatalogManager() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-brand-navy">Service Categories</h2>
-          <p className="text-sm text-brand-muted">Expand a category to manage its services. Add, edit, or remove at either level.</p>
-        </div>
+      {/* Toolbar only — the page header ("Service Catalog") already titles this screen, so we don't
+          repeat a second heading here; just the primary action, right-aligned. */}
+      <div className="flex items-center justify-end">
         <AdminButton onClick={openCreateCategory} iconLeft={<Plus size={18} />}>
           Add Category
         </AdminButton>
@@ -319,6 +345,13 @@ export default function ServiceCatalogManager() {
                     className="flex flex-1 items-center gap-3 text-left"
                   >
                     {isExpanded ? <ChevronDown size={18} className="text-brand-navy" /> : <ChevronRight size={18} className="text-brand-muted" />}
+                    <div className="h-10 w-14 shrink-0 overflow-hidden rounded-[8px] border border-border bg-brand-surface">
+                      {category.imageUrl ? (
+                        <img src={category.imageUrl} alt={category.categoryName} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-brand-muted"><ImageIcon size={14} /></div>
+                      )}
+                    </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-bold text-brand-navy">{category.categoryName}</h3>
@@ -393,6 +426,36 @@ export default function ServiceCatalogManager() {
           }
         >
           <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-24 shrink-0 overflow-hidden rounded-[8px] border border-border bg-brand-surface">
+                {categoryForm.imageUrl ? (
+                  <img src={categoryForm.imageUrl} alt="Category" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-brand-muted"><ImageIcon size={18} /></div>
+                )}
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-border bg-white px-3 py-2 text-sm font-medium text-brand-navy hover:border-brand-navy/30">
+                <Upload size={16} />
+                {categoryImageBusy ? "Uploading…" : categoryForm.imageUrl ? "Replace image" : "Upload image"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  disabled={categoryImageBusy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) handleCategoryFileSelected(file)
+                    event.target.value = ""
+                  }}
+                />
+              </label>
+              {categoryForm.imageUrl && (
+                <button type="button" className="text-xs font-semibold text-brand-muted hover:text-red-600" onClick={() => setCategoryForm({ ...categoryForm, imageUrl: null })}>
+                  Remove
+                </button>
+              )}
+            </div>
+
             <AdminTextField label="Category Name" value={categoryForm.categoryName} onChange={(event) => setCategoryForm({ ...categoryForm, categoryName: event.target.value })} />
             <AdminTextField label="Code" value={categoryForm.categoryCode} onChange={(event) => setCategoryForm({ ...categoryForm, categoryCode: event.target.value })} helperText="Leave blank to auto-generate from the name." />
             <AdminTextField label="Description" value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} />
@@ -504,6 +567,17 @@ export default function ServiceCatalogManager() {
           title="Crop service image (16:9)"
           onCancel={() => setCropFile(null)}
           onCropped={(result) => void uploadCroppedServiceImage(result)}
+        />
+      )}
+
+      {categoryCropFile && (
+        <ImageCropModal
+          file={categoryCropFile}
+          targetWidth={1280}
+          targetHeight={720}
+          title="Crop category image (16:9)"
+          onCancel={() => setCategoryCropFile(null)}
+          onCropped={(result) => void uploadCroppedCategoryImage(result)}
         />
       )}
     </div>

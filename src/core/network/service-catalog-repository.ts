@@ -29,6 +29,7 @@ export interface AdminCatalogCategory {
   categoryCode: string
   categoryName: string
   description: string
+  imageUrl: string | null
   isActive: boolean
   sortOrder: number
   serviceCount: number
@@ -65,6 +66,7 @@ export interface CategoryUpsertInput {
   categoryName: string
   categoryCode?: string | null
   description?: string | null
+  imageUrl?: string | null
   isActive: boolean
   sortOrder: number
 }
