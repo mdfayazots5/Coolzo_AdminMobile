@@ -20,6 +20,11 @@ interface ImageCropModalProps {
   targetWidth: number
   targetHeight: number
   title?: string
+  /**
+   * Exported image MIME type. Defaults to "image/jpeg" (smaller, for photos). Pass "image/png" for
+   * assets that must keep transparency (e.g. a brand logo) — JPEG would flatten it onto a background.
+   */
+  outputType?: "image/jpeg" | "image/png"
   onCancel: () => void
   onCropped: (result: CroppedImage) => void
 }
@@ -34,6 +39,7 @@ export default function ImageCropModal({
   targetWidth,
   targetHeight,
   title,
+  outputType = "image/jpeg",
   onCancel,
   onCropped,
 }: ImageCropModalProps) {
@@ -126,10 +132,15 @@ export default function ImageCropModal({
     ctx.imageSmoothingQuality = "high"
     ctx.drawImage(image, srcLeft, srcTop, srcW, srcH, 0, 0, targetWidth, targetHeight)
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92)
+    const isPng = outputType === "image/png"
+    const dataUrl = isPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.92)
     const base64Content = dataUrl.slice(dataUrl.indexOf(",") + 1)
     const baseName = file.name.replace(/\.[^.]+$/, "")
-    onCropped({ base64Content, contentType: "image/jpeg", fileName: `${baseName}.jpg` })
+    onCropped({
+      base64Content,
+      contentType: outputType,
+      fileName: `${baseName}.${isPng ? "png" : "jpg"}`,
+    })
   }
 
   return (

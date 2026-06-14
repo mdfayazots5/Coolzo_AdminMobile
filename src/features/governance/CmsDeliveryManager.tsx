@@ -35,11 +35,16 @@ function describeAspectRatio(width: number, height: number): string {
 }
 
 const LOGO_RECOMMENDATION = {
-  dimensions: "Guideline only — scaled to fit, never cropped",
+  dimensions: "Crop to a wide header lockup (3:1); SVG scales untouched",
   format: "SVG preferred (scales perfectly); raster ~64 px tall",
   background: "Transparent PNG / WebP / SVG",
   maxSize: "5 MB",
 };
+
+// Raster logo crop export size — a wide header lockup (3:1) that suits the portal's fixed-height,
+// auto-width logo slot. PNG output preserves transparency.
+const LOGO_CROP_WIDTH = 480;
+const LOGO_CROP_HEIGHT = 160;
 
 const BREAKPOINT_CONTEXT: Record<string, string> = {
   desktop: "wide desktop / large-screen layout",
@@ -150,6 +155,7 @@ export default function CmsDeliveryManager() {
   const [isUploadingLogo, setIsUploadingLogo] = React.useState(false);
   const [isCustomKey, setIsCustomKey] = React.useState(false);
   const [slotCrop, setSlotCrop] = React.useState<{ slot: ScreenImageSlot; file: File } | null>(null);
+  const [logoCropFile, setLogoCropFile] = React.useState<File | null>(null);
 
   const reload = React.useCallback(async () => {
     const [theme, slotList, blockList, currentManifest] = await Promise.all([
@@ -281,13 +287,32 @@ export default function CmsDeliveryManager() {
     }
   };
 
-  const handleLogoUpload = async (file: File) => {
+  // Raster logos (PNG/WebP) are framed in the cropper; SVGs are vector and bypass it (a canvas crop
+  // would rasterize them and lose scalability).
+  const handleLogoFileSelected = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
+    if (file.type === "image/svg+xml") {
+      void uploadLogoAsset(file.name, file.type, () => readFileAsBase64(file));
+      return;
+    }
+    setLogoCropFile(file);
+  };
+
+  // Shared upload path for both the cropped raster logo and the SVG bypass.
+  const uploadLogoAsset = async (
+    fileName: string,
+    contentType: string,
+    getBase64: () => Promise<string>,
+  ) => {
     setIsUploadingLogo(true);
     try {
-      const base64Content = await readFileAsBase64(file);
+      const base64Content = await getBase64();
       const { imageUrl } = await cmsDeliveryRepository.uploadAsset({
-        fileName: file.name,
-        contentType: file.type,
+        fileName,
+        contentType,
         base64Content,
         assetKey: "logo",
       });
@@ -298,6 +323,11 @@ export default function CmsDeliveryManager() {
     } finally {
       setIsUploadingLogo(false);
     }
+  };
+
+  const uploadLogoCropped = (cropped: CroppedImage) => {
+    setLogoCropFile(null);
+    void uploadLogoAsset(cropped.fileName, cropped.contentType, () => Promise.resolve(cropped.base64Content));
   };
 
   const handlePublish = async () => {
@@ -461,12 +491,12 @@ export default function CmsDeliveryManager() {
                   {isUploadingLogo ? "Uploading…" : tokens["theme.logoUrl"] ? "Replace logo" : "Upload logo"}
                   <input
                     type="file"
-                    accept="image/png,image/svg+xml,image/webp"
+                    accept="image/png,image/svg+xml,image/webp,image/jpeg"
                     className="hidden"
                     disabled={isUploadingLogo}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file) void handleLogoUpload(file);
+                      if (file) handleLogoFileSelected(file);
                       event.target.value = "";
                     }}
                   />
@@ -802,6 +832,18 @@ export default function CmsDeliveryManager() {
           title={`Crop ${slotCrop.slot.slotKey} · ${slotCrop.slot.breakpoint}`}
           onCancel={() => setSlotCrop(null)}
           onCropped={(result) => void uploadSlotCropped(slotCrop.slot, result)}
+        />
+      )}
+
+      {logoCropFile && (
+        <ImageCropModal
+          file={logoCropFile}
+          targetWidth={LOGO_CROP_WIDTH}
+          targetHeight={LOGO_CROP_HEIGHT}
+          title="Crop logo"
+          outputType="image/png"
+          onCancel={() => setLogoCropFile(null)}
+          onCropped={uploadLogoCropped}
         />
       )}
     </div>
