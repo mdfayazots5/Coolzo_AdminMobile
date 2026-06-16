@@ -14,6 +14,8 @@ export interface AdminServiceItem {
   basePrice: number
   pricingModelName: string
   imageUrl: string
+  /** Admin-saved AI image-generation prompt. Empty = UI shows a generated suggested prompt. */
+  imageAIPrompt: string
 }
 
 /** A service category (tblServiceCategory) — used to label services in the catalog view. */
@@ -30,6 +32,8 @@ export interface AdminCatalogCategory {
   categoryName: string
   description: string
   imageUrl: string | null
+  /** Admin-saved AI image-generation prompt seed. Empty = UI shows a generated suggested prompt. */
+  imageAIPrompt: string | null
   isActive: boolean
   sortOrder: number
   serviceCount: number
@@ -46,6 +50,8 @@ export interface AdminCatalogService {
   basePrice: number
   estimatedDurationInMinutes: number
   imageUrl: string | null
+  /** Admin-saved AI image-generation prompt seed. Empty = UI shows a generated suggested prompt. */
+  imageAIPrompt: string | null
   isActive: boolean
   sortOrder: number
 }
@@ -67,6 +73,7 @@ export interface CategoryUpsertInput {
   categoryCode?: string | null
   description?: string | null
   imageUrl?: string | null
+  imageAIPrompt?: string | null
   isActive: boolean
   sortOrder: number
 }
@@ -80,6 +87,7 @@ export interface ServiceUpsertInput {
   basePrice: number
   estimatedDurationInMinutes: number
   imageUrl?: string | null
+  imageAIPrompt?: string | null
   isActive: boolean
   sortOrder: number
 }
@@ -100,6 +108,12 @@ export const serviceCatalogRepository = {
   /** Persists (or clears, when null) the per-service image on tblService. */
   async setServiceImage(serviceId: number, imageUrl: string | null): Promise<AdminServiceItem> {
     const response = await apiClient.put<AdminServiceItem>(`/api/admin/services/${serviceId}/image`, { imageUrl })
+    return response.data
+  },
+
+  /** Persists (or clears, when null) the per-service AI image-generation prompt on tblService. */
+  async setServicePrompt(serviceId: number, imageAIPrompt: string | null): Promise<AdminServiceItem> {
+    const response = await apiClient.put<AdminServiceItem>(`/api/admin/services/${serviceId}/image-prompt`, { imageAIPrompt })
     return response.data
   },
 

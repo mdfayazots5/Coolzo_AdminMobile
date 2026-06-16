@@ -10,6 +10,8 @@ import { AdminCard } from "@/components/shared/Cards";
 import { AdminButton } from "@/components/shared/AdminButton";
 import { InlineLoader } from "@/components/shared/Layout";
 import ImageCropModal, { type CroppedImage } from "@/components/shared/ImageCropModal";
+import ImagePromptStudio from "@/components/shared/ImagePromptStudio";
+import { composeSlotPrompt } from "@/lib/image-prompts";
 import {
   cmsDeliveryRepository,
   CmsBlock,
@@ -24,16 +26,6 @@ import {
 
 type TabKey = "theme" | "content" | "images" | "publish";
 
-function greatestCommonDivisor(a: number, b: number): number {
-  return b === 0 ? a : greatestCommonDivisor(b, a % b);
-}
-
-function describeAspectRatio(width: number, height: number): string {
-  if (!width || !height) return "";
-  const divisor = greatestCommonDivisor(width, height) || 1;
-  return `${width / divisor}:${height / divisor}`;
-}
-
 const LOGO_RECOMMENDATION = {
   dimensions: "Crop to a wide header lockup (3:1); SVG scales untouched",
   format: "SVG preferred (scales perfectly); raster ~64 px tall",
@@ -46,32 +38,30 @@ const LOGO_RECOMMENDATION = {
 const LOGO_CROP_WIDTH = 480;
 const LOGO_CROP_HEIGHT = 160;
 
-const BREAKPOINT_CONTEXT: Record<string, string> = {
-  desktop: "wide desktop / large-screen layout",
-  tablet: "tablet / mid-width screen layout",
-  mobile: "mobile portrait / small-screen layout",
-};
-
-/**
- * Builds an AI image-generation prompt (Gemini / any model) that pairs the seeded
- * creative direction with the slot's hard technical constraints — exact resolution,
- * aspect ratio, and target breakpoint — so the generated image fits the slot.
- */
-function buildImagePrompt(slot: ScreenImageSlot): string {
-  const ratio = describeAspectRatio(slot.recommendedWidth, slot.recommendedHeight);
-  const context = BREAKPOINT_CONTEXT[slot.breakpoint] ?? `${slot.breakpoint} layout`;
-  const creative =
+/** Picks the slot's editable creative subject seed (falls back to alt text / a generic line). */
+function slotSubject(slot: ScreenImageSlot): string {
+  return (
     slot.suggestedAIPrompt?.trim() ||
     slot.altText?.trim() ||
-    "Professional brand image for an AC (air-conditioning) service company.";
+    `${slot.slotKey} imagery for a premium AC (air-conditioning) service brand`
+  );
+}
 
-  return [
-    creative,
-    `Use: this is the "${slot.slotKey}" image on the ${slot.pageKey} page, for a ${context}.`,
-    `Output exactly ${slot.recommendedWidth}×${slot.recommendedHeight} px${ratio ? ` (${ratio} aspect ratio)` : ""}; fill the whole frame edge to edge with no letterboxing, borders, or padding.`,
-    `Keep the main subject centered within the safe area so nothing important is cropped at this aspect ratio.`,
-    `High-resolution, photorealistic, sharp focus, even professional lighting, navy and gold brand palette. No text, logos, watermarks, or UI overlays.`,
-  ].join(" ");
+/** Composes the full Gemini photoreal prompt (positive + negative) for a slot from a subject seed. */
+function composeSlotPromptFromSlot(slot: ScreenImageSlot, subject: string): string {
+  return composeSlotPrompt({
+    subject,
+    pageKey: slot.pageKey,
+    slotKey: slot.slotKey,
+    breakpoint: slot.breakpoint,
+    width: slot.recommendedWidth,
+    height: slot.recommendedHeight,
+  });
+}
+
+/** Full Gemini prompt for a slot using its currently saved subject seed. */
+function buildImagePrompt(slot: ScreenImageSlot): string {
+  return composeSlotPromptFromSlot(slot, slotSubject(slot));
 }
 
 const EMPTY_BLOCK: CmsBlockUpsert = {
@@ -362,6 +352,25 @@ export default function CmsDeliveryManager() {
   const copyPrompt = async (prompt: string) => {
     await navigator.clipboard.writeText(prompt);
     toast.success("AI image prompt copied.");
+  };
+
+  // Persists the slot's creative-direction seed. The technical constraints (exact px, aspect, brand,
+  // negatives) are still auto-appended at render by buildImagePrompt, so we only store the creative
+  // part — no double-appended boilerplate accumulates.
+  const saveSlotPrompt = async (slot: ScreenImageSlot, seed: string) => {
+    const updated = await cmsDeliveryRepository.updateImageSlot(slot.screenImageSlotId, {
+      pageKey: slot.pageKey,
+      slotKey: slot.slotKey,
+      breakpoint: slot.breakpoint,
+      recommendedWidth: slot.recommendedWidth,
+      recommendedHeight: slot.recommendedHeight,
+      altText: slot.altText,
+      suggestedAIPrompt: seed,
+      isActive: slot.isActive,
+    });
+    setSlots((current) =>
+      current.map((item) => (item.screenImageSlotId === updated.screenImageSlotId ? updated : item)),
+    );
   };
 
   if (isLoading) {
@@ -716,6 +725,23 @@ export default function CmsDeliveryManager() {
 
       {tab === "images" && (
         <div className="space-y-6">
+          {slots.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-[12px] border border-slate-100 bg-white px-4 py-3 text-sm">
+              <span className="font-medium text-brand-navy">{slots.length} image slots</span>
+              <span className="text-brand-muted">
+                <span className="font-medium text-brand-navy">{slots.filter((slot) => slot.imageUrl).length}</span> uploaded
+              </span>
+              <span className="text-brand-muted">
+                <span className="font-medium text-brand-navy">{slots.filter((slot) => !slot.imageUrl).length}</span> still empty
+              </span>
+              <span className="text-brand-muted">
+                <span className="font-medium text-brand-navy">
+                  {slots.filter((slot) => slot.suggestedAIPrompt?.trim()).length}
+                </span>{" "}
+                with a saved prompt
+              </span>
+            </div>
+          )}
           {Object.keys(slotsByPage).length === 0 && (
             <AdminCard className="p-6 text-sm text-brand-muted">No screen image slots defined yet.</AdminCard>
           )}
@@ -744,7 +770,7 @@ export default function CmsDeliveryManager() {
 
                     <div className="rounded-[8px] bg-slate-50 p-3">
                       <div className="mb-1 flex items-center justify-between">
-                        <span className="text-xs font-medium text-brand-muted">Suggested AI image prompt</span>
+                        <span className="text-xs font-medium text-brand-muted">Full Gemini prompt (final)</span>
                         <button
                           type="button"
                           onClick={() => copyPrompt(buildImagePrompt(slot))}
@@ -753,23 +779,35 @@ export default function CmsDeliveryManager() {
                           <Copy size={12} /> Copy
                         </button>
                       </div>
-                      <p className="text-xs leading-relaxed text-slate-600">{buildImagePrompt(slot)}</p>
+                      <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-600">
+                        {buildImagePrompt(slot)}
+                      </pre>
                     </div>
 
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50">
-                      <Upload size={16} />
-                      Upload image
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) handleSlotFileSelected(slot, file);
-                          event.target.value = "";
-                        }}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-[8px] border border-brand-navy px-3 py-2 text-sm font-medium text-brand-navy hover:bg-slate-50">
+                        <Upload size={16} />
+                        Upload image
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          className="hidden"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) handleSlotFileSelected(slot, file);
+                            event.target.value = "";
+                          }}
+                        />
+                      </label>
+                      <ImagePromptStudio
+                        title={`${slot.slotKey} · ${slot.breakpoint}`}
+                        dimensionHint={`${slot.recommendedWidth}×${slot.recommendedHeight}`}
+                        suggestedSeed={slotSubject(slot)}
+                        savedSeed={slot.suggestedAIPrompt ?? ""}
+                        compose={(seed) => composeSlotPromptFromSlot(slot, seed)}
+                        onSave={(seed) => saveSlotPrompt(slot, seed)}
                       />
-                    </label>
+                    </div>
                   </div>
                 ))}
               </div>

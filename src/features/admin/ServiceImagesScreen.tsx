@@ -11,6 +11,8 @@ import { useMasterData } from "@/core/master-data/MasterDataProvider"
 import { serviceCatalogRepository, type AdminServiceItem } from "@/core/network/service-catalog-repository"
 import { Image as ImageIcon, PackageSearch, Upload } from "lucide-react"
 import ImageCropModal, { type CroppedImage } from "@/components/shared/ImageCropModal"
+import ImagePromptStudio from "@/components/shared/ImagePromptStudio"
+import { composeServicePrompt, defaultServiceSubject } from "@/lib/image-prompts"
 import { toast } from "sonner"
 
 export default function ServiceImagesScreen() {
@@ -65,6 +67,15 @@ export default function ServiceImagesScreen() {
     }
   }
 
+  const savePrompt = async (service: AdminServiceItem, prompt: string) => {
+    const updated = await serviceCatalogRepository.setServicePrompt(service.serviceId, prompt || null)
+    setServices((current) =>
+      current.map((item) =>
+        item.serviceId === service.serviceId ? { ...item, imageAIPrompt: updated.imageAIPrompt ?? "" } : item,
+      ),
+    )
+  }
+
   const handleRemove = async (service: AdminServiceItem) => {
     setBusyId(service.serviceId)
     try {
@@ -91,6 +102,30 @@ export default function ServiceImagesScreen() {
           Upload a photo for each bookable service. Images are saved immediately and shown on the public website.
         </p>
       </div>
+
+      {services.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-[12px] border border-border bg-brand-surface px-4 py-3 text-sm">
+          <span className="font-medium text-brand-navy">{services.length} services</span>
+          <span className="text-brand-muted">
+            <span className="font-medium text-brand-navy">
+              {services.filter((service) => service.imageUrl).length}
+            </span>{" "}
+            with an image
+          </span>
+          <span className="text-brand-muted">
+            <span className="font-medium text-brand-navy">
+              {services.filter((service) => !service.imageUrl).length}
+            </span>{" "}
+            still need one
+          </span>
+          <span className="text-brand-muted">
+            <span className="font-medium text-brand-navy">
+              {services.filter((service) => service.imageAIPrompt).length}
+            </span>{" "}
+            custom prompts saved
+          </span>
+        </div>
+      )}
 
       <SectionHeader title="Bookable Services" icon={<PackageSearch size={18} />} />
 
@@ -137,6 +172,18 @@ export default function ServiceImagesScreen() {
                           }}
                         />
                       </label>
+                      <ImagePromptStudio
+                        title={service.serviceName}
+                        dimensionHint="1280×720 · 16:9"
+                        suggestedSeed={defaultServiceSubject({
+                          serviceName: service.serviceName,
+                          summary: service.summary,
+                        })}
+                        savedSeed={service.imageAIPrompt ?? ""}
+                        compose={composeServicePrompt}
+                        disabled={isBusy}
+                        onSave={(seed) => savePrompt(service, seed)}
+                      />
                       {service.imageUrl && (
                         <AdminButton
                           type="button"

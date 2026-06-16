@@ -20,6 +20,13 @@ import {
 } from "@/core/network/service-catalog-repository"
 import { ChevronDown, ChevronRight, Image as ImageIcon, Pencil, Plus, Trash2, Upload, X } from "lucide-react"
 import ImageCropModal, { type CroppedImage } from "@/components/shared/ImageCropModal"
+import ImagePromptStudio from "@/components/shared/ImagePromptStudio"
+import {
+  composeCategoryPrompt,
+  composeServicePrompt,
+  defaultCategorySubject,
+  defaultServiceSubject,
+} from "@/lib/image-prompts"
 import { toast } from "sonner"
 
 interface CategoryForm {
@@ -28,6 +35,7 @@ interface CategoryForm {
   categoryCode: string
   description: string
   imageUrl: string | null
+  imageAIPrompt: string
   isActive: boolean
   sortOrder: string
 }
@@ -42,6 +50,7 @@ interface ServiceForm {
   basePrice: string
   estimatedDurationInMinutes: string
   imageUrl: string | null
+  imageAIPrompt: string
   isActive: boolean
   sortOrder: string
 }
@@ -114,7 +123,7 @@ export default function ServiceCatalogManager() {
   // ── Category modal ───────────────────────────────────────────────────────
   const openCreateCategory = () => {
     const nextSort = (catalog?.categories.length ?? 0) + 1
-    setCategoryForm({ categoryName: "", categoryCode: "", description: "", imageUrl: null, isActive: true, sortOrder: String(nextSort) })
+    setCategoryForm({ categoryName: "", categoryCode: "", description: "", imageUrl: null, imageAIPrompt: "", isActive: true, sortOrder: String(nextSort) })
   }
 
   const openEditCategory = (category: AdminCatalogCategory) => {
@@ -124,6 +133,7 @@ export default function ServiceCatalogManager() {
       categoryCode: category.categoryCode,
       description: category.description,
       imageUrl: category.imageUrl,
+      imageAIPrompt: category.imageAIPrompt ?? "",
       isActive: category.isActive,
       sortOrder: String(category.sortOrder),
     })
@@ -163,6 +173,7 @@ export default function ServiceCatalogManager() {
       categoryCode: categoryForm.categoryCode.trim() || null,
       description: categoryForm.description.trim() || null,
       imageUrl: categoryForm.imageUrl,
+      imageAIPrompt: categoryForm.imageAIPrompt.trim() || null,
       isActive: categoryForm.isActive,
       sortOrder: Number(categoryForm.sortOrder) || 0,
     }
@@ -209,6 +220,7 @@ export default function ServiceCatalogManager() {
       basePrice: "",
       estimatedDurationInMinutes: "60",
       imageUrl: null,
+      imageAIPrompt: "",
       isActive: true,
       sortOrder: String((servicesByCategory.get(serviceCategoryId)?.length ?? 0) + 1),
     })
@@ -225,6 +237,7 @@ export default function ServiceCatalogManager() {
       basePrice: String(service.basePrice),
       estimatedDurationInMinutes: String(service.estimatedDurationInMinutes),
       imageUrl: service.imageUrl,
+      imageAIPrompt: service.imageAIPrompt ?? "",
       isActive: service.isActive,
       sortOrder: String(service.sortOrder),
     })
@@ -276,6 +289,7 @@ export default function ServiceCatalogManager() {
       basePrice: Number(serviceForm.basePrice) || 0,
       estimatedDurationInMinutes: Number(serviceForm.estimatedDurationInMinutes) || 0,
       imageUrl: serviceForm.imageUrl,
+      imageAIPrompt: serviceForm.imageAIPrompt.trim() || null,
       isActive: serviceForm.isActive,
       sortOrder: Number(serviceForm.sortOrder) || 0,
     }
@@ -454,6 +468,20 @@ export default function ServiceCatalogManager() {
                   Remove
                 </button>
               )}
+              <ImagePromptStudio
+                title={categoryForm.categoryName.trim() || "New category"}
+                dimensionHint="1280×720 · 16:9"
+                suggestedSeed={defaultCategorySubject({
+                  categoryName: categoryForm.categoryName,
+                  description: categoryForm.description,
+                })}
+                savedSeed={categoryForm.imageAIPrompt}
+                compose={composeCategoryPrompt}
+                onSave={(seed) => {
+                  setCategoryForm((current) => (current ? { ...current, imageAIPrompt: seed } : current))
+                  return Promise.resolve()
+                }}
+              />
             </div>
 
             <AdminTextField label="Category Name" value={categoryForm.categoryName} onChange={(event) => setCategoryForm({ ...categoryForm, categoryName: event.target.value })} />
@@ -509,6 +537,20 @@ export default function ServiceCatalogManager() {
                   Remove
                 </button>
               )}
+              <ImagePromptStudio
+                title={serviceForm.serviceName.trim() || "New service"}
+                dimensionHint="1280×720 · 16:9"
+                suggestedSeed={defaultServiceSubject({
+                  serviceName: serviceForm.serviceName,
+                  summary: serviceForm.summary,
+                })}
+                savedSeed={serviceForm.imageAIPrompt}
+                compose={composeServicePrompt}
+                onSave={(seed) => {
+                  setServiceForm((current) => (current ? { ...current, imageAIPrompt: seed } : current))
+                  return Promise.resolve()
+                }}
+              />
             </div>
 
             <AdminTextField label="Service Name" value={serviceForm.serviceName} onChange={(event) => setServiceForm({ ...serviceForm, serviceName: event.target.value })} />
